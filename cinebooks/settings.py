@@ -48,6 +48,13 @@ ALLOWED_HOSTS = [h.strip() for h in _hosts_env.split(",") if h.strip()]
 # usam o Open Library, que não precisa de chave).
 TMDB_API_KEY = os.environ.get("TMDB_API_KEY", "")
 
+# Chave gratuita da API do OMDb (omdbapi.com), usada para buscar a nota do
+# público (IMDb) e a nota da crítica (Metacritic) de filmes e séries. Crie a
+# sua de graça em http://www.omdbapi.com/apikey.aspx (chega por e-mail em
+# poucos minutos). Sem essa variável definida, o site simplesmente não mostra
+# essas notas externas — nada quebra.
+OMDB_API_KEY = os.environ.get("OMDB_API_KEY", "")
+
 
 # Application definition
 

@@ -96,29 +96,6 @@ python manage.py buscar_capas
 Se a `TMDB_API_KEY` não estiver configurada, os filmes/séries simplesmente continuam
 sem capa real (o site mostra uma imagem padrão no lugar) — nada quebra.
 
-## Notas do público e da crítica (internet)
-
-Além da nota que os próprios usuários do site dão (avaliações do CineBooks), a página
-de cada filme/série/livro também mostra, separadamente, o que **a internet em geral**
-acha:
-
-- **Nota do público:** vem do IMDb (filmes/séries) ou da média de avaliações do Open
-  Library (livros).
-- **Nota da crítica:** vem do Metacritic (só existe para filmes/séries — livro não tem
-  um "Metacritic" equivalente).
-
-Essas duas notas vêm da API do **OMDb** (omdbapi.com), gratuita:
-
-1. Peça sua chave em **http://www.omdbapi.com/apikey.aspx** (escolha o plano "FREE",
-   preencha e-mail — a chave chega por e-mail em poucos minutos).
-2. Configure como variável de ambiente `OMDB_API_KEY`, do mesmo jeito que a
-   `TMDB_API_KEY` (veja a seção acima).
-
-Igual às capas, essas notas são buscadas **na primeira vez que alguém abre a página**
-do título (não em todo mundo de uma vez, pra não deixar o site lento) e depois ficam
-salvas. Sem a `OMDB_API_KEY` configurada, o site simplesmente não mostra essas notas —
-nada quebra, e as avaliações da comunidade do CineBooks continuam funcionando normal.
-
 ## Estrutura do projeto
 
 ```
@@ -157,9 +134,7 @@ dos três. Isso evita duplicação de código nas views e no template.
 - Cadastro de conta e login/logout.
 - Avaliação (nota de 1 a 5 + comentário opcional) — cada usuário pode avaliar um mesmo
   título só uma vez (e pode editar a nota depois).
-- Cálculo automático da nota média de cada título (avaliações dos usuários do site).
-- Nota do público (IMDb/Open Library) e nota da crítica (Metacritic), exibidas
-  separadamente das avaliações do site — vêm da API do OMDb.
+- Cálculo automático da nota média de cada título.
 - Busca global (filmes + séries + livros de uma vez).
 - Painel administrativo (`/admin/`) para cadastrar/editar títulos com formulário pronto,
   sem precisar escrever HTML.

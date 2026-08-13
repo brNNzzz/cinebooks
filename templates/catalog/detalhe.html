@@ -15,9 +15,17 @@
         <h1 class="h3">{{ item.titulo }} <small class="text-muted">({{ item.ano_lancamento }})</small></h1>
 
         {% if media %}
-            <p class="fs-5">⭐ <strong>{{ media }}</strong> / 5 &middot; {{ item.total_avaliacoes }} avaliação(ões)</p>
+            <p class="fs-5 mb-1">⭐ <strong>{{ media }}</strong> / 5 &middot; {{ item.total_avaliacoes }} avaliação(ões) no CineBooks</p>
         {% else %}
-            <p class="text-muted">Ainda sem avaliações. Seja o primeiro a avaliar!</p>
+            <p class="text-muted mb-1">Ainda sem avaliações no CineBooks. Seja o primeiro a avaliar!</p>
+        {% endif %}
+
+        {% if item.nota_publico or item.nota_critica %}
+            <p class="text-muted small mb-3">
+                Notas da internet:
+                {% if item.nota_publico %}<span class="badge bg-primary">Público: {{ item.nota_publico }}/10</span>{% endif %}
+                {% if item.nota_critica %}<span class="badge bg-info text-dark">Crítica: {{ item.nota_critica }}/10</span>{% endif %}
+            </p>
         {% endif %}
 
         <ul class="list-unstyled text-muted">

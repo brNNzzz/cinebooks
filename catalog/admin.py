@@ -16,7 +16,10 @@ class PessoaAdmin(admin.ModelAdmin):
 
 @admin.register(Filme)
 class FilmeAdmin(admin.ModelAdmin):
-    list_display = ["titulo", "ano_lancamento", "diretor", "duracao_minutos", "dados_completos"]
+    list_display = [
+        "titulo", "ano_lancamento", "diretor", "duracao_minutos",
+        "nota_publico", "nota_critica", "dados_completos",
+    ]
     list_filter = ["generos", "ano_lancamento", "dados_completos"]
     search_fields = ["titulo", "diretor"]
     filter_horizontal = ["generos", "elenco"]
@@ -24,7 +27,10 @@ class FilmeAdmin(admin.ModelAdmin):
 
 @admin.register(Serie)
 class SerieAdmin(admin.ModelAdmin):
-    list_display = ["titulo", "ano_lancamento", "criador", "numero_temporadas", "dados_completos"]
+    list_display = [
+        "titulo", "ano_lancamento", "criador", "numero_temporadas",
+        "nota_publico", "nota_critica", "dados_completos",
+    ]
     list_filter = ["generos", "ano_lancamento", "dados_completos"]
     search_fields = ["titulo", "criador"]
     filter_horizontal = ["generos", "elenco"]
@@ -32,7 +38,7 @@ class SerieAdmin(admin.ModelAdmin):
 
 @admin.register(Livro)
 class LivroAdmin(admin.ModelAdmin):
-    list_display = ["titulo", "ano_lancamento", "autor", "editora", "dados_completos"]
+    list_display = ["titulo", "ano_lancamento", "autor", "editora", "nota_publico", "dados_completos"]
     list_filter = ["generos", "ano_lancamento", "dados_completos"]
     search_fields = ["titulo", "autor"]
     filter_horizontal = ["generos"]

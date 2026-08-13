@@ -64,6 +64,16 @@ class Titulo(models.Model):
     generos = models.ManyToManyField(Genero, verbose_name="gêneros", blank=True)
     criado_em = models.DateTimeField("adicionado em", auto_now_add=True)
 
+    # Notas vindas da internet (não são as avaliações dos usuários do site,
+    # que continuam só em Avaliacao — isso aqui é só pra exibir "o que a
+    # internet acha" ao lado da nota da nossa comunidade).
+    # nota_publico: nota do público em geral (IMDb pra filme/série, média de
+    # avaliações do Open Library pra livro), numa escala de 0 a 10.
+    nota_publico = models.FloatField("nota do público (internet)", null=True, blank=True)
+    # nota_critica: nota da crítica especializada (Metacritic, via OMDb).
+    # Só existe pra filme/série — livro não tem um "Metacritic" equivalente.
+    nota_critica = models.FloatField("nota da crítica (internet)", null=True, blank=True)
+
     # Guarda o ID do título na API externa (TMDB para filme/série, Open
     # Library para livro). Usado depois pra completar os dados (elenco,
     # sinopse maior) sem precisar buscar o título de novo pelo nome.

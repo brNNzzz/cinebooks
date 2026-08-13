@@ -19,6 +19,7 @@ logger = logging.getLogger(__name__)
 
 TMDB_BASE_URL = "https://api.themoviedb.org/3"
 TMDB_IMAGE_BASE_URL = "https://image.tmdb.org/t/p/w500"
+OMDB_BASE_URL = "https://www.omdbapi.com/"
 TIMEOUT_SEGUNDOS = 6
 
 # Lista oficial de gêneros do TMDB (fixa, praticamente nunca muda) — usamos
@@ -163,6 +164,57 @@ def detalhes_serie(tmdb_id):
     }
 
 
+def omdb_configurado():
+    return bool(getattr(settings, "OMDB_API_KEY", ""))
+
+
+def buscar_notas_omdb(titulo, ano):
+    """Busca no OMDb (omdbapi.com) a nota do público (IMDb) e a nota da
+    crítica (Metacritic) de um filme ou série, pelo título + ano. Devolve um
+    dict {"nota_publico": float|None, "nota_critica": float|None} — nunca
+    lança erro, só devolve tudo None se algo falhar ou não tiver a chave
+    configurada."""
+    vazio = {"nota_publico": None, "nota_critica": None}
+    chave = getattr(settings, "OMDB_API_KEY", "")
+    if not chave or not titulo:
+        return vazio
+    try:
+        resposta = requests.get(
+            OMDB_BASE_URL,
+            params={"apikey": chave, "t": titulo, "y": ano or ""},
+            timeout=TIMEOUT_SEGUNDOS,
+        )
+        resposta.raise_for_status()
+        dados = resposta.json()
+        if dados.get("Response") != "True":
+            return vazio
+
+        nota_publico = None
+        nota_imdb = dados.get("imdbRating")
+        if nota_imdb and nota_imdb != "N/A":
+            try:
+                nota_publico = float(nota_imdb)
+            except ValueError:
+                nota_publico = None
+
+        nota_critica = None
+        for avaliacao in dados.get("Ratings") or []:
+            if avaliacao.get("Source") == "Metacritic":
+                valor = (avaliacao.get("Value") or "").split("/")[0]
+                try:
+                    # Metacritic é de 0 a 100 — convertemos pra escala de 0 a 10,
+                    # igual às outras notas do site, pra ficar fácil de comparar.
+                    nota_critica = round(float(valor) / 10, 1)
+                except ValueError:
+                    nota_critica = None
+                break
+
+        return {"nota_publico": nota_publico, "nota_critica": nota_critica}
+    except (requests.RequestException, ValueError) as erro:
+        logger.warning("Falha ao buscar notas de %r no OMDb: %s", titulo, erro)
+        return vazio
+
+
 def buscar_livros(query):
     if not query:
         return []
@@ -220,3 +272,20 @@ def sinopse_livro(olid):
     except (requests.RequestException, ValueError) as erro:
         logger.warning("Falha ao buscar sinopse do livro %r no Open Library: %s", olid, erro)
         return ""
+
+
+def nota_publico_livro(olid):
+    """Busca a média de avaliações do público do Open Library para um livro
+    (0 a 5 lá, convertemos pra 0 a 10 pra ficar na mesma escala das outras
+    notas do site). Devolve None se o livro ainda não tiver avaliações, ou se
+    a busca falhar."""
+    try:
+        resposta = requests.get(
+            f"https://openlibrary.org/works/{olid}/ratings.json", timeout=TIMEOUT_SEGUNDOS
+        )
+        resposta.raise_for_status()
+        media = (resposta.json().get("summary") or {}).get("average")
+        return round(media * 2, 1) if media else None
+    except (requests.RequestException, ValueError) as erro:
+        logger.warning("Falha ao buscar nota do livro %r no Open Library: %s", olid, erro)
+        return None

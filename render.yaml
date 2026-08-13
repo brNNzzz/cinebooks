@@ -27,6 +27,11 @@ services:
       # depois de criar sua chave em themoviedb.org (veja o README).
       - key: TMDB_API_KEY
         sync: false
+      # Chave gratuita do OMDb (omdbapi.com) para buscar a nota do público
+      # (IMDb) e a nota da crítica (Metacritic) de filmes e séries. Sem essa
+      # chave o site simplesmente não mostra essas notas — nada quebra.
+      - key: OMDB_API_KEY
+        sync: false
       # Credenciais do usuário administrador, criado automaticamente pelo
       # build.sh a cada deploy (o plano gratuito do Render não tem aba Shell
       # para rodar "createsuperuser" manualmente). Preencha os três no painel.

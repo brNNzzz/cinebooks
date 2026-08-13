@@ -198,6 +198,9 @@ def _completar_filme(item):
         item.sinopse = info["sinopse"]
     if not item.poster_url and info.get("poster_url"):
         item.poster_url = info["poster_url"]
+    notas = busca_externa.buscar_notas_omdb(item.titulo, item.ano_lancamento)
+    item.nota_publico = notas.get("nota_publico")
+    item.nota_critica = notas.get("nota_critica")
     item.dados_completos = True
     item.save()
     if elenco:
@@ -236,6 +239,9 @@ def _completar_serie(item):
         item.sinopse = info["sinopse"]
     if not item.poster_url and info.get("poster_url"):
         item.poster_url = info["poster_url"]
+    notas = busca_externa.buscar_notas_omdb(item.titulo, item.ano_lancamento)
+    item.nota_publico = notas.get("nota_publico")
+    item.nota_critica = notas.get("nota_critica")
     item.dados_completos = True
     item.save()
     if elenco:
@@ -267,6 +273,9 @@ def _completar_livro(item):
     sinopse = busca_externa.sinopse_livro(olid)
     if sinopse and len(sinopse) > len(item.sinopse or ""):
         item.sinopse = sinopse
+    nota = busca_externa.nota_publico_livro(olid)
+    if nota is not None:
+        item.nota_publico = nota
     item.dados_completos = True
     item.save()
 
@@ -348,6 +357,9 @@ def _criar_filme_do_tmdb(tmdb_id):
         return None
     generos = info.pop("generos", [])
     elenco = info.pop("elenco", [])
+    notas = busca_externa.buscar_notas_omdb(info["titulo"], info["ano_lancamento"])
+    info["nota_publico"] = notas.get("nota_publico")
+    info["nota_critica"] = notas.get("nota_critica")
     info["id_externo"] = str(tmdb_id)
     info["dados_completos"] = True
     obj, _ = Filme.objects.get_or_create(titulo=info["titulo"], defaults=info)
@@ -362,6 +374,9 @@ def _criar_serie_do_tmdb(tmdb_id):
         return None
     generos = info.pop("generos", [])
     elenco = info.pop("elenco", [])
+    notas = busca_externa.buscar_notas_omdb(info["titulo"], info["ano_lancamento"])
+    info["nota_publico"] = notas.get("nota_publico")
+    info["nota_critica"] = notas.get("nota_critica")
     info["id_externo"] = str(tmdb_id)
     info["dados_completos"] = True
     obj, _ = Serie.objects.get_or_create(titulo=info["titulo"], defaults=info)
@@ -382,6 +397,7 @@ def _criar_livro_do_openlibrary(resultado_busca):
         "editora": resultado_busca.get("editora", ""),
         "poster_url": resultado_busca.get("poster_url", ""),
         "sinopse": busca_externa.sinopse_livro(resultado_busca.get("id", "")),
+        "nota_publico": busca_externa.nota_publico_livro(resultado_busca.get("id", "")),
         "id_externo": resultado_busca.get("id", ""),
         "dados_completos": True,
     }
