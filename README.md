@@ -43,16 +43,6 @@ python3 manage.py runserver
 
 Depois disso, acesse **http://127.0.0.1:8000/** no navegador.
 
-### Login de administrador já criado
-
-Um usuário admin já vem configurado no banco de dados enviado, pra vocês acessarem o
-painel administrativo (`/admin/`) sem precisar criar um do zero:
-
-- **usuário:** `admin`
-- **senha:** `admin1234`
-
-Recomendo trocar essa senha (ou criar a de vocês com `createsuperuser`) antes de
-apresentar o trabalho.
 
 ## Capas automáticas (pôsteres reais de filmes, séries e livros)
 
