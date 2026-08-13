@@ -1,0 +1,18 @@
+{% load static %}
+<div class="col-6 col-md-4 col-lg-3 mb-4">
+    <div class="card h-100 shadow-sm border-secondary-subtle">
+        <img
+            src="{{ item.poster_url|default:'https://placehold.co/400x600/1f2937/ffffff?text=Sem+imagem' }}"
+            class="poster card-img-top" alt="Capa de {{ item.titulo }}">
+        <div class="card-body">
+            <span class="badge bg-secondary mb-1">Ainda não está no catálogo</span>
+            <h6 class="card-title mb-1">{{ item.titulo }}</h6>
+            <p class="card-text text-muted small mb-1">
+                {{ item.ano }}{% if item.autor %} &middot; {{ item.autor }}{% endif %}
+            </p>
+            {% if item.resumo %}
+                <p class="card-text small">{{ item.resumo }}{% if item.resumo|length >= 180 %}…{% endif %}</p>
+            {% endif %}
+        </div>
+    </div>
+</div>

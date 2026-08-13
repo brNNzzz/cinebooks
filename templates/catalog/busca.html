@@ -11,22 +11,56 @@
     <h2 class="h5">Filmes</h2>
     <div class="row mb-3">
         {% for item in resultados.filmes %}{% include "catalog/_card.html" with item=item tipo="filme" %}{% empty %}
-            <p class="text-muted">Nenhum filme encontrado.</p>
+            <p class="text-muted">Nenhum filme encontrado no catálogo.</p>
         {% endfor %}
     </div>
 
     <h2 class="h5">Séries</h2>
     <div class="row mb-3">
         {% for item in resultados.series %}{% include "catalog/_card.html" with item=item tipo="serie" %}{% empty %}
-            <p class="text-muted">Nenhuma série encontrada.</p>
+            <p class="text-muted">Nenhuma série encontrada no catálogo.</p>
         {% endfor %}
     </div>
 
     <h2 class="h5">Livros</h2>
     <div class="row mb-3">
         {% for item in resultados.livros %}{% include "catalog/_card.html" with item=item tipo="livro" %}{% empty %}
-            <p class="text-muted">Nenhum livro encontrado.</p>
+            <p class="text-muted">Nenhum livro encontrado no catálogo.</p>
         {% endfor %}
     </div>
+
+    {% if resultados_online.filmes or resultados_online.series or resultados_online.livros %}
+    <hr class="my-4">
+    <h2 class="h4 mb-1">Encontrados online</h2>
+    <p class="text-muted small mb-3">
+        Esses títulos ainda não foram cadastrados no CineBooks — as informações abaixo
+        vêm direto da internet (TMDB / Open Library), só para consulta. Ainda não dá
+        pra avaliar eles.
+        {% if user.is_staff %}
+            <a href="{% url 'importar_buscar' %}?q={{ termo }}">Quer adicionar algum ao catálogo? Clique aqui.</a>
+        {% endif %}
+    </p>
+
+    {% if resultados_online.filmes %}
+        <h3 class="h6 text-muted">Filmes</h3>
+        <div class="row mb-3">
+            {% for item in resultados_online.filmes %}{% include "catalog/_card_online.html" with item=item %}{% endfor %}
+        </div>
+    {% endif %}
+
+    {% if resultados_online.series %}
+        <h3 class="h6 text-muted">Séries</h3>
+        <div class="row mb-3">
+            {% for item in resultados_online.series %}{% include "catalog/_card_online.html" with item=item %}{% endfor %}
+        </div>
+    {% endif %}
+
+    {% if resultados_online.livros %}
+        <h3 class="h6 text-muted">Livros</h3>
+        <div class="row mb-3">
+            {% for item in resultados_online.livros %}{% include "catalog/_card_online.html" with item=item %}{% endfor %}
+        </div>
+    {% endif %}
+    {% endif %}
 {% endif %}
 {% endblock %}

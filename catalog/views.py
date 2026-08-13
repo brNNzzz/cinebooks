@@ -114,16 +114,42 @@ def avaliar(request, tipo, pk):
     return redirect("detalhe", tipo=tipo, pk=pk)
 
 
+def _remover_duplicatas_online(resultados_online, queryset_local):
+    """Tira da lista de resultados online os títulos que já estão no catálogo
+    (pra não mostrar a mesma coisa duas vezes na tela de busca)."""
+    titulos_locais = {t.lower() for t in queryset_local.values_list("titulo", flat=True)}
+    return [r for r in resultados_online if r["titulo"].lower() not in titulos_locais]
+
+
 def busca(request):
+    """Busca tanto no catálogo do site quanto nas APIs externas (TMDB e Open
+    Library) — assim qualquer visitante vê informações de um título mesmo que
+    ele ainda não tenha sido cadastrado no site."""
     termo = request.GET.get("q", "").strip()
     resultados = {"filmes": [], "series": [], "livros": []}
+    resultados_online = {"filmes": [], "series": [], "livros": []}
 
     if termo:
         resultados["filmes"] = Filme.objects.filter(titulo__icontains=termo)
         resultados["series"] = Serie.objects.filter(titulo__icontains=termo)
         resultados["livros"] = Livro.objects.filter(titulo__icontains=termo)
 
-    return render(request, "catalog/busca.html", {"termo": termo, "resultados": resultados})
+        resultados_online["filmes"] = _remover_duplicatas_online(
+            busca_externa.buscar_filmes_series("movie", termo), resultados["filmes"]
+        )
+        resultados_online["series"] = _remover_duplicatas_online(
+            busca_externa.buscar_filmes_series("tv", termo), resultados["series"]
+        )
+        resultados_online["livros"] = _remover_duplicatas_online(
+            busca_externa.buscar_livros(termo), resultados["livros"]
+        )
+
+    contexto = {
+        "termo": termo,
+        "resultados": resultados,
+        "resultados_online": resultados_online,
+    }
+    return render(request, "catalog/busca.html", contexto)
 
 
 @staff_member_required
