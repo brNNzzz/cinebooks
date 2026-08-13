@@ -43,6 +43,16 @@ python3 manage.py runserver
 
 Depois disso, acesse **http://127.0.0.1:8000/** no navegador.
 
+### Login de administrador já criado
+
+Um usuário admin já vem configurado no banco de dados enviado, pra vocês acessarem o
+painel administrativo (`/admin/`) sem precisar criar um do zero:
+
+- **usuário:** `admin`
+- **senha:** `admin1234`
+
+Recomendo trocar essa senha (ou criar a de vocês com `createsuperuser`) antes de
+apresentar o trabalho.
 
 ## Capas automáticas (pôsteres reais de filmes, séries e livros)
 
@@ -109,6 +119,38 @@ do título (não em todo mundo de uma vez, pra não deixar o site lento) e depoi
 salvas. Sem a `OMDB_API_KEY` configurada, o site simplesmente não mostra essas notas —
 nada quebra, e as avaliações da comunidade do CineBooks continuam funcionando normal.
 
+## Perfil de usuário (avaliações por categoria)
+
+Todo usuário logado tem uma página `/perfil/` (link "Olá, fulano" no menu) com "Minhas
+avaliações", separadas em três abas — Filmes / Séries / Livros — mostrando só o que
+aquele usuário avaliou em cada categoria, das mais recentes pras mais antigas.
+
+(Foto de perfil ficou de fora por enquanto — pode ser adicionada depois; ela exigiria
+upload de arquivo, que no plano grátis do Render some a cada deploy sem um serviço de
+armazenamento externo configurado junto.)
+
+## Idiomas (seletor de bandeiras)
+
+O site pode ser exibido em 11 idiomas — clique na bandeira no canto superior direito
+do menu pra trocar. São eles: Português (padrão), Inglês, Mandarim, Hindi, Espanhol,
+Francês, Árabe, Bengali, Russo, Urdu e Indonésio (as línguas mais faladas do mundo,
+além do português). Árabe e urdu também trocam a direção do texto pra
+direita-para-esquerda automaticamente.
+
+A troca cobre os textos fixos da interface: menu, botões, rótulos de página, mensagens
+de "sem avaliações" etc. O conteúdo que vem das APIs externas (sinopse, nome dos
+filmes/séries/livros buscados no TMDB/Open Library) continua em português, porque é
+esse o idioma que essas APIs devolvem pra nós — traduzir esse conteúdo automaticamente
+ficaria fora do escopo deste projeto, mas é uma melhoria possível de citar se o
+professor perguntar "o que mais dava pra fazer".
+
+Tecnicamente, não usamos o sistema de tradução "de fábrica" do Django (que depende de
+um programa externo, o `gettext`, pra compilar os arquivos de tradução) — em vez
+disso, as traduções ficam num dicionário Python simples
+(`catalog/i18n.py`), e uma tag de template própria (`{% t "chave" %}`) busca o texto
+certo de acordo com o idioma escolhido (guardado na sessão da pessoa). Isso evita
+depender de instalar ferramentas extras no computador de quem for rodar o projeto.
+
 ## Estrutura do projeto
 
 ```
@@ -164,12 +206,18 @@ dos três. Isso evita duplicação de código nas views e no template.
   ficam salvos no banco e aparecem na hora pra todo mundo. Isso é controlado pelo campo
   `dados_completos` do título (ver `catalog/models.py` e a função
   `_garantir_dados_completos` em `catalog/views.py`).
+- **Perfil de usuário** (`/perfil/`): avaliações da própria pessoa, separadas em abas
+  por categoria (Filmes / Séries / Livros).
+- **Seletor de idioma** (bandeira no menu): troca a interface entre 11 idiomas —
+  Português, Inglês, Mandarim, Hindi, Espanhol, Francês, Árabe, Bengali, Russo, Urdu e
+  Indonésio.
 
 ## Possíveis melhorias (caso o professor pergunte "o que mais dava pra fazer")
 
-- Upload de imagem de pôster em vez de link (usando `ImageField`).
 - Paginação nas listagens (hoje mostra tudo de uma vez).
 - API REST (com Django REST Framework) para consumir os dados de um app mobile, por exemplo.
+- Traduzir também o conteúdo vindo das APIs externas (sinopses, nomes), hoje só em
+  português.
 - Sistema de "favoritos"/lista para assistir depois.
 - Deploy em produção (ex: Render, Railway ou PythonAnywhere) com PostgreSQL no lugar do SQLite.
 

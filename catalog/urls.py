@@ -6,6 +6,8 @@ urlpatterns = [
     path("", views.home, name="home"),
     path("busca/", views.busca, name="busca"),
     path("conta/registrar/", views.registrar, name="registrar"),
+    path("perfil/", views.perfil, name="perfil"),
+    path("idioma/<str:codigo>/", views.mudar_idioma, name="mudar_idioma"),
     path("importar/", views.importar_buscar, name="importar_buscar"),
     path(
         "importar/filme/<int:tmdb_id>/adicionar/",

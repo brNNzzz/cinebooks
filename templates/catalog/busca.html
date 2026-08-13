@@ -1,37 +1,34 @@
 {% extends "base.html" %}
+{% load i18n_custom %}
 
 {% block titulo %}Busca — CineBooks{% endblock %}
 
 {% block conteudo %}
-<h1 class="h3 mb-4">Resultados para "{{ termo }}"</h1>
+<h1 class="h3 mb-4">{% t "busca_resultados_para" %} "{{ termo }}"</h1>
 
 {% if not termo %}
-    <p class="text-muted">Digite algo na busca do topo da página.</p>
+    <p class="text-muted">{% t "busca_digite" %}</p>
 {% else %}
-    <p class="text-muted small">
-        A busca já procura automaticamente em filmes, séries e livros — inclusive
-        títulos que ainda não tinham sido cadastrados por ninguém, importando as
-        informações na hora.
-    </p>
+    <p class="text-muted small">{% t "busca_dica" %}</p>
 
-    <h2 class="h5">Filmes</h2>
+    <h2 class="h5">{% t "busca_filmes" %}</h2>
     <div class="row mb-3">
         {% for item in resultados.filmes %}{% include "catalog/_card.html" with item=item tipo="filme" %}{% empty %}
-            <p class="text-muted">Nenhum filme encontrado.</p>
+            <p class="text-muted">{% t "busca_nenhum_filme" %}</p>
         {% endfor %}
     </div>
 
-    <h2 class="h5">Séries</h2>
+    <h2 class="h5">{% t "busca_series" %}</h2>
     <div class="row mb-3">
         {% for item in resultados.series %}{% include "catalog/_card.html" with item=item tipo="serie" %}{% empty %}
-            <p class="text-muted">Nenhuma série encontrada.</p>
+            <p class="text-muted">{% t "busca_nenhuma_serie" %}</p>
         {% endfor %}
     </div>
 
-    <h2 class="h5">Livros</h2>
+    <h2 class="h5">{% t "busca_livros" %}</h2>
     <div class="row mb-3">
         {% for item in resultados.livros %}{% include "catalog/_card.html" with item=item tipo="livro" %}{% empty %}
-            <p class="text-muted">Nenhum livro encontrado.</p>
+            <p class="text-muted">{% t "busca_nenhum_livro" %}</p>
         {% endfor %}
     </div>
 {% endif %}

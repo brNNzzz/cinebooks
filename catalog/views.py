@@ -12,6 +12,7 @@ from django.views.decorators.http import require_POST
 
 from . import busca_externa
 from .forms import AvaliacaoForm, RegistroForm
+from .i18n import IDIOMAS
 from .models import Avaliacao, Filme, Genero, Livro, Pessoa, Serie
 
 logger = logging.getLogger(__name__)
@@ -549,3 +550,36 @@ def registrar(request):
         form = RegistroForm()
 
     return render(request, "registration/registrar.html", {"form": form})
+
+
+@login_required
+def perfil(request):
+    """Página do próprio usuário: as avaliações dela, separadas em abas por
+    categoria (filmes / séries / livros), mais recentes primeiro."""
+    avaliacoes_do_usuario = Avaliacao.objects.filter(usuario=request.user).order_by("-criado_em")
+    tipos_por_content_type = {
+        ContentType.objects.get_for_model(Filme).id: "filme",
+        ContentType.objects.get_for_model(Serie).id: "serie",
+        ContentType.objects.get_for_model(Livro).id: "livro",
+    }
+    avaliacoes_por_tipo = {"filme": [], "serie": [], "livro": []}
+    for avaliacao in avaliacoes_do_usuario:
+        tipo_desse_item = tipos_por_content_type.get(avaliacao.content_type_id)
+        if tipo_desse_item:
+            avaliacoes_por_tipo[tipo_desse_item].append(avaliacao)
+
+    contexto = {
+        "avaliacoes_filmes": avaliacoes_por_tipo["filme"],
+        "avaliacoes_series": avaliacoes_por_tipo["serie"],
+        "avaliacoes_livros": avaliacoes_por_tipo["livro"],
+    }
+    return render(request, "catalog/perfil.html", contexto)
+
+
+def mudar_idioma(request, codigo):
+    """Troca o idioma do site (guardado na sessão da pessoa) e volta pra
+    página de onde ela veio."""
+    if codigo in IDIOMAS:
+        request.session["idioma"] = codigo
+    destino = request.META.get("HTTP_REFERER") or "/"
+    return redirect(destino)

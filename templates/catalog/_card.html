@@ -1,4 +1,5 @@
 {% load static %}
+{% load i18n_custom %}
 <div class="col-6 col-md-4 col-lg-3 mb-4">
     <a href="{% url 'detalhe' tipo item.pk %}" class="text-decoration-none text-reset">
         <div class="card card-titulo shadow-sm">
@@ -12,7 +13,7 @@
                     <span class="badge bg-warning text-dark nota-badge">⭐ {{ item.media_notas|floatformat:1 }}</span>
                     <span class="text-muted small">({{ item.qtd_avaliacoes }})</span>
                 {% else %}
-                    <span class="text-muted small">Sem avaliações</span>
+                    <span class="text-muted small">{% t "sem_avaliacoes_curto" %}</span>
                 {% endif %}
             </div>
         </div>
