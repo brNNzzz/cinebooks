@@ -103,18 +103,24 @@ gratuito), então o Render cria os dois de uma vez só, com um clique.
 7. Quando o deploy terminar, o Render mostra a URL do site no topo da página, algo
    como `https://cinebooks.onrender.com` — é só clicar para abrir.
 
+> **Nota:** a aba **Shell** do Render (um terminal dentro do navegador) só existe nos
+> planos pagos. Por isso, tanto a criação do administrador quanto a busca de capas
+> abaixo são feitas por variáveis de ambiente + o script `build.sh`, que já roda
+> sozinho a cada deploy — sem precisar de nenhum terminal.
+
 ### Criar seu usuário administrador no site publicado
 
-O `render.yaml` já roda as migrações e popula o catálogo de exemplo sozinho, mas
-criar um superusuário exige uma senha seria, então esse passo é manual:
-
-1. No painel do Render, abra o serviço **cinebooks** → aba **Shell** (é um terminal
-   dentro do navegador, não precisa instalar nada).
-2. Rode:
-   ```bash
-   python manage.py createsuperuser
-   ```
-3. Pronto — use esse login em `https://cinebooks.onrender.com/admin/`.
+1. No painel do Render, abra o serviço **cinebooks** → aba **Environment**.
+2. Clique em **Edit** e preencha as três variáveis que já estão reservadas ali
+   (o `render.yaml` já deixou elas criadas, só faltando o valor):
+   - `DJANGO_SUPERUSER_USERNAME` → o nome de usuário que você quer usar
+   - `DJANGO_SUPERUSER_EMAIL` → qualquer e-mail (pode ser fictício)
+   - `DJANGO_SUPERUSER_PASSWORD` → uma senha sua, forte
+3. Clique em **Save Changes**. Isso já dispara um novo deploy sozinho — o `build.sh`
+   vai criar esse usuário automaticamente durante o build (streaming de progresso na
+   aba **Logs**, se quiser acompanhar).
+4. Quando o deploy terminar, entre em `https://cinebooks.onrender.com/admin/` com
+   esse usuário e senha.
 
 ### Ativar as capas reais de filmes e séries (TMDB)
 
@@ -122,17 +128,14 @@ O `render.yaml` já deixa uma variável `TMDB_API_KEY` reservada, mas vazia — 
 não preenche ela sozinho por segurança. Depois de criar sua chave gratuita (passo a
 passo no `README.md`, seção "Capas automáticas"):
 
-1. No painel do Render, abra o serviço **cinebooks** → aba **Environment**.
-2. Encontre `TMDB_API_KEY` e cole o valor da sua chave.
-3. Clique em **Save Changes** — isso já reinicia o serviço sozinho.
-4. Para buscar a capa dos títulos que já existem no banco (o catálogo de exemplo),
-   abra a aba **Shell** e rode:
-   ```bash
-   python manage.py buscar_capas
-   ```
+1. Na mesma aba **Environment**, clique em **Edit**.
+2. Encontre `TMDB_API_KEY` e cole o valor da sua chave (ou token).
+3. Clique em **Save Changes** — isso dispara um novo deploy sozinho, e o `build.sh`
+   já roda o `buscar_capas` automaticamente nesse processo, atualizando o catálogo
+   de exemplo com as capas reais.
 
 As capas dos livros já funcionam sem precisar de nada disso (Open Library não exige
-chave).
+chave) — elas são buscadas assim que os livros são cadastrados.
 
 ### Atualizando o site depois de mudanças
 

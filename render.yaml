@@ -27,6 +27,15 @@ services:
       # depois de criar sua chave em themoviedb.org (veja o README).
       - key: TMDB_API_KEY
         sync: false
+      # Credenciais do usuário administrador, criado automaticamente pelo
+      # build.sh a cada deploy (o plano gratuito do Render não tem aba Shell
+      # para rodar "createsuperuser" manualmente). Preencha os três no painel.
+      - key: DJANGO_SUPERUSER_USERNAME
+        sync: false
+      - key: DJANGO_SUPERUSER_EMAIL
+        sync: false
+      - key: DJANGO_SUPERUSER_PASSWORD
+        sync: false
 
 databases:
   - name: cinebooks-db
