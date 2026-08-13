@@ -21,6 +21,23 @@ TMDB_BASE_URL = "https://api.themoviedb.org/3"
 TMDB_IMAGE_BASE_URL = "https://image.tmdb.org/t/p/w500"
 TIMEOUT_SEGUNDOS = 6
 
+# Lista oficial de gêneros do TMDB (fixa, praticamente nunca muda) — usamos
+# esse mapa pronto pra não precisar de uma chamada extra à API só pra
+# descobrir o nome de cada gênero.
+GENEROS_FILME_TMDB = {
+    28: "Ação", 12: "Aventura", 16: "Animação", 35: "Comédia", 80: "Crime",
+    99: "Documentário", 18: "Drama", 10751: "Família", 14: "Fantasia",
+    36: "História", 27: "Terror", 10402: "Música", 9648: "Mistério",
+    10749: "Romance", 878: "Ficção Científica", 10770: "Cinema TV",
+    53: "Suspense", 10752: "Guerra", 37: "Faroeste",
+}
+GENEROS_SERIE_TMDB = {
+    10759: "Ação e Aventura", 16: "Animação", 35: "Comédia", 80: "Crime",
+    99: "Documentário", 18: "Drama", 10751: "Família", 10762: "Infantil",
+    9648: "Mistério", 10763: "Notícia", 10764: "Reality", 10765: "Ficção Científica",
+    10766: "Novela", 10767: "Talk Show", 10768: "Guerra e Política", 37: "Faroeste",
+}
+
 
 def tmdb_configurado():
     return bool(getattr(settings, "TMDB_API_KEY", ""))
@@ -45,9 +62,13 @@ def _tmdb_get(caminho, parametros_extra=None):
 
 
 def buscar_filmes_series(tipo_tmdb, query):
-    """tipo_tmdb é 'movie' ou 'tv'. Devolve uma lista resumida de resultados."""
+    """tipo_tmdb é 'movie' ou 'tv'. Devolve uma lista resumida de resultados —
+    já com tudo que dá pra cadastrar um item completo, numa ÚNICA chamada à
+    API (sem precisar buscar detalhes um por um depois, o que deixaria a
+    busca lenta)."""
     if not tmdb_configurado() or not query:
         return []
+    mapa_generos = GENEROS_FILME_TMDB if tipo_tmdb == "movie" else GENEROS_SERIE_TMDB
     try:
         dados = _tmdb_get(f"/search/{tipo_tmdb}", {"query": query})
         resultados = []
@@ -62,6 +83,10 @@ def buscar_filmes_series(tipo_tmdb, query):
                     "ano": data[:4] if data else "",
                     "poster_url": f"{TMDB_IMAGE_BASE_URL}{poster_path}" if poster_path else "",
                     "resumo": (item.get("overview") or "")[:180],
+                    "sinopse": item.get("overview") or "",
+                    "generos": [
+                        mapa_generos[g_id] for g_id in item.get("genre_ids") or [] if g_id in mapa_generos
+                    ],
                 }
             )
         return resultados

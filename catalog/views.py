@@ -114,47 +114,162 @@ def avaliar(request, tipo, pk):
     return redirect("detalhe", tipo=tipo, pk=pk)
 
 
-def _remover_duplicatas_online(resultados_online, queryset_local):
-    """Tira da lista de resultados online os títulos que já estão no catálogo
-    (pra não mostrar a mesma coisa duas vezes na tela de busca)."""
-    titulos_locais = {t.lower() for t in queryset_local.values_list("titulo", flat=True)}
-    return [r for r in resultados_online if r["titulo"].lower() not in titulos_locais]
+def _importar_generos(obj, nomes_generos):
+    obj.generos.set([Genero.objects.get_or_create(nome=nome)[0] for nome in nomes_generos if nome])
+
+
+# Quantos resultados "novos" (que ainda não estão no catálogo) a busca tenta
+# importar automaticamente por categoria. Como a importação "rápida" (usada
+# na busca pública) não faz nenhuma chamada extra de API, esse número pode
+# ser generoso sem deixar a página lenta.
+LIMITE_IMPORTACAO_AUTOMATICA = 10
+
+
+def _criar_filme_rapido(resultado_busca):
+    """Cria o Filme só com os dados que já vieram na busca (sem chamada
+    extra à API) — usado na busca pública, pra ficar rápida. Diretor e
+    duração ficam em branco; dá pra completar depois pelo admin ou
+    reimportando pela página /importar/ (que traz os dados completos)."""
+    titulo = (resultado_busca.get("titulo") or "").strip()
+    ano = resultado_busca.get("ano")
+    if not titulo or not ano:
+        return None
+    dados = {
+        "ano_lancamento": int(ano),
+        "sinopse": resultado_busca.get("sinopse", ""),
+        "poster_url": resultado_busca.get("poster_url", ""),
+    }
+    obj, _ = Filme.objects.get_or_create(titulo=titulo, defaults=dados)
+    _importar_generos(obj, resultado_busca.get("generos", []))
+    return obj
+
+
+def _criar_serie_rapida(resultado_busca):
+    titulo = (resultado_busca.get("titulo") or "").strip()
+    ano = resultado_busca.get("ano")
+    if not titulo or not ano:
+        return None
+    dados = {
+        "ano_lancamento": int(ano),
+        "sinopse": resultado_busca.get("sinopse", ""),
+        "poster_url": resultado_busca.get("poster_url", ""),
+    }
+    obj, _ = Serie.objects.get_or_create(titulo=titulo, defaults=dados)
+    _importar_generos(obj, resultado_busca.get("generos", []))
+    return obj
+
+
+def _criar_livro_rapido(resultado_busca):
+    """Cria o Livro só com os dados da busca (sem buscar a sinopse separada,
+    que é uma chamada extra) — usado na busca pública, pra ficar rápida."""
+    titulo = (resultado_busca.get("titulo") or "").strip()
+    ano = resultado_busca.get("ano")
+    if not titulo or not ano:
+        return None
+    dados = {
+        "ano_lancamento": int(ano),
+        "autor": resultado_busca.get("autor", ""),
+        "editora": resultado_busca.get("editora", ""),
+        "poster_url": resultado_busca.get("poster_url", ""),
+    }
+    if resultado_busca.get("numero_paginas"):
+        dados["numero_paginas"] = resultado_busca["numero_paginas"]
+    obj, _ = Livro.objects.get_or_create(titulo=titulo, defaults=dados)
+    return obj
+
+
+def _criar_filme_do_tmdb(tmdb_id):
+    """Busca os detalhes completos do filme no TMDB e salva no catálogo.
+    Devolve o objeto Filme criado (ou já existente), ou None se falhar."""
+    info = busca_externa.detalhes_filme(tmdb_id)
+    if not info or not info.get("titulo") or not info.get("ano_lancamento"):
+        return None
+    generos = info.pop("generos", [])
+    obj, _ = Filme.objects.get_or_create(titulo=info["titulo"], defaults=info)
+    _importar_generos(obj, generos)
+    return obj
+
+
+def _criar_serie_do_tmdb(tmdb_id):
+    info = busca_externa.detalhes_serie(tmdb_id)
+    if not info or not info.get("titulo") or not info.get("ano_lancamento"):
+        return None
+    generos = info.pop("generos", [])
+    obj, _ = Serie.objects.get_or_create(titulo=info["titulo"], defaults=info)
+    _importar_generos(obj, generos)
+    return obj
+
+
+def _criar_livro_do_openlibrary(resultado_busca):
+    """resultado_busca é um item da lista devolvida por busca_externa.buscar_livros()."""
+    titulo = (resultado_busca.get("titulo") or "").strip()
+    ano = resultado_busca.get("ano")
+    if not titulo or not ano:
+        return None
+    dados = {
+        "ano_lancamento": int(ano),
+        "autor": resultado_busca.get("autor", ""),
+        "editora": resultado_busca.get("editora", ""),
+        "poster_url": resultado_busca.get("poster_url", ""),
+        "sinopse": busca_externa.sinopse_livro(resultado_busca.get("id", "")),
+    }
+    if resultado_busca.get("numero_paginas"):
+        dados["numero_paginas"] = resultado_busca["numero_paginas"]
+    obj, _ = Livro.objects.get_or_create(titulo=titulo, defaults=dados)
+    return obj
 
 
 def busca(request):
-    """Busca tanto no catálogo do site quanto nas APIs externas (TMDB e Open
-    Library) — assim qualquer visitante vê informações de um título mesmo que
-    ele ainda não tenha sido cadastrado no site."""
+    """Busca no catálogo do site E nas APIs externas (TMDB e Open Library).
+
+    Quando a API encontra um título que ainda não existe no banco, ele é
+    importado automaticamente na hora — assim a busca sempre devolve a
+    página completa do título (sinopse, ficha técnica, já pronto pra
+    avaliar), mesmo que ninguém tivesse cadastrado ele antes.
+    """
     termo = request.GET.get("q", "").strip()
     resultados = {"filmes": [], "series": [], "livros": []}
-    resultados_online = {"filmes": [], "series": [], "livros": []}
 
     if termo:
-        resultados["filmes"] = Filme.objects.filter(titulo__icontains=termo)
-        resultados["series"] = Serie.objects.filter(titulo__icontains=termo)
-        resultados["livros"] = Livro.objects.filter(titulo__icontains=termo)
+        filmes = list(Filme.objects.filter(titulo__icontains=termo))
+        series = list(Serie.objects.filter(titulo__icontains=termo))
+        livros = list(Livro.objects.filter(titulo__icontains=termo))
 
-        resultados_online["filmes"] = _remover_duplicatas_online(
-            busca_externa.buscar_filmes_series("movie", termo), resultados["filmes"]
-        )
-        resultados_online["series"] = _remover_duplicatas_online(
-            busca_externa.buscar_filmes_series("tv", termo), resultados["series"]
-        )
-        resultados_online["livros"] = _remover_duplicatas_online(
-            busca_externa.buscar_livros(termo), resultados["livros"]
-        )
+        titulos_filmes = {f.titulo.lower() for f in filmes}
+        titulos_series = {s.titulo.lower() for s in series}
+        titulos_livros = {l.titulo.lower() for l in livros}
 
-    contexto = {
-        "termo": termo,
-        "resultados": resultados,
-        "resultados_online": resultados_online,
-    }
-    return render(request, "catalog/busca.html", contexto)
+        for r in busca_externa.buscar_filmes_series("movie", termo)[:LIMITE_IMPORTACAO_AUTOMATICA]:
+            if r["titulo"].lower() not in titulos_filmes:
+                novo = _criar_filme_rapido(r)
+                if novo:
+                    filmes.append(novo)
+                    titulos_filmes.add(novo.titulo.lower())
+
+        for r in busca_externa.buscar_filmes_series("tv", termo)[:LIMITE_IMPORTACAO_AUTOMATICA]:
+            if r["titulo"].lower() not in titulos_series:
+                novo = _criar_serie_rapida(r)
+                if novo:
+                    series.append(novo)
+                    titulos_series.add(novo.titulo.lower())
+
+        for r in busca_externa.buscar_livros(termo)[:LIMITE_IMPORTACAO_AUTOMATICA]:
+            if r["titulo"].lower() not in titulos_livros:
+                novo = _criar_livro_rapido(r)
+                if novo:
+                    livros.append(novo)
+                    titulos_livros.add(novo.titulo.lower())
+
+        resultados = {"filmes": filmes, "series": series, "livros": livros}
+
+    return render(request, "catalog/busca.html", {"termo": termo, "resultados": resultados})
 
 
 @staff_member_required
 def importar_buscar(request):
-    """Página de busca+importação: só a equipe (staff) pode acessar."""
+    """Página de busca+importação manual, com escolha do resultado certo —
+    útil quando a busca automática traz o título errado ou você quer mais
+    controle. Só a equipe (staff) acessa."""
     tipo = request.GET.get("tipo", "filme")
     query = request.GET.get("q", "").strip()
 
@@ -176,74 +291,56 @@ def importar_buscar(request):
     return render(request, "catalog/importar.html", contexto)
 
 
-def _importar_generos(obj, nomes_generos):
-    obj.generos.set([Genero.objects.get_or_create(nome=nome)[0] for nome in nomes_generos if nome])
-
-
 @staff_member_required
 @require_POST
 def importar_adicionar_filme(request, tmdb_id):
-    info = busca_externa.detalhes_filme(tmdb_id)
-    if not info or not info.get("titulo") or not info.get("ano_lancamento"):
+    obj = _criar_filme_do_tmdb(tmdb_id)
+    if not obj:
         messages.error(
             request,
             "Não foi possível importar esse filme agora (falha ao buscar no TMDB). Tente de novo em instantes.",
         )
         return redirect("importar_buscar")
-
-    generos = info.pop("generos", [])
-    obj, criado = Filme.objects.get_or_create(titulo=info["titulo"], defaults=info)
-    _importar_generos(obj, generos)
-    messages.success(
-        request, f'"{obj.titulo}" {"foi adicionado ao" if criado else "já estava no"} catálogo!'
-    )
+    messages.success(request, f'"{obj.titulo}" está no catálogo!')
     return redirect("detalhe", tipo="filme", pk=obj.pk)
 
 
 @staff_member_required
 @require_POST
 def importar_adicionar_serie(request, tmdb_id):
-    info = busca_externa.detalhes_serie(tmdb_id)
-    if not info or not info.get("titulo") or not info.get("ano_lancamento"):
+    obj = _criar_serie_do_tmdb(tmdb_id)
+    if not obj:
         messages.error(
             request,
             "Não foi possível importar essa série agora (falha ao buscar no TMDB). Tente de novo em instantes.",
         )
         return redirect("importar_buscar")
-
-    generos = info.pop("generos", [])
-    obj, criado = Serie.objects.get_or_create(titulo=info["titulo"], defaults=info)
-    _importar_generos(obj, generos)
-    messages.success(
-        request, f'"{obj.titulo}" {"foi adicionada ao" if criado else "já estava no"} catálogo!'
-    )
+    messages.success(request, f'"{obj.titulo}" está no catálogo!')
     return redirect("detalhe", tipo="serie", pk=obj.pk)
 
 
 @staff_member_required
 @require_POST
 def importar_adicionar_livro(request, olid):
-    titulo = request.POST.get("titulo", "").strip()
-    ano = request.POST.get("ano", "").strip()
-    if not titulo or not ano.isdigit():
-        messages.error(request, "Não foi possível importar esse livro (dados incompletos).")
-        return redirect("importar_buscar")
-
-    dados = {
-        "ano_lancamento": int(ano),
+    resultado_busca = {
+        "id": olid,
+        "titulo": request.POST.get("titulo", "").strip(),
+        "ano": request.POST.get("ano", "").strip(),
         "autor": request.POST.get("autor", ""),
         "editora": request.POST.get("editora", ""),
         "poster_url": request.POST.get("poster_url", ""),
-        "sinopse": busca_externa.sinopse_livro(olid),
+        "numero_paginas": request.POST.get("numero_paginas", ""),
     }
-    numero_paginas = request.POST.get("numero_paginas", "")
-    if numero_paginas.isdigit():
-        dados["numero_paginas"] = int(numero_paginas)
+    if resultado_busca["numero_paginas"].isdigit():
+        resultado_busca["numero_paginas"] = int(resultado_busca["numero_paginas"])
+    else:
+        resultado_busca["numero_paginas"] = None
 
-    obj, criado = Livro.objects.get_or_create(titulo=titulo, defaults=dados)
-    messages.success(
-        request, f'"{obj.titulo}" {"foi adicionado ao" if criado else "já estava no"} catálogo!'
-    )
+    obj = _criar_livro_do_openlibrary(resultado_busca)
+    if not obj:
+        messages.error(request, "Não foi possível importar esse livro (dados incompletos).")
+        return redirect("importar_buscar")
+    messages.success(request, f'"{obj.titulo}" está no catálogo!')
     return redirect("detalhe", tipo="livro", pk=obj.pk)
 
 
