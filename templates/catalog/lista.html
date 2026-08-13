@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+
+{% block titulo %}{{ rotulo_plural }} — CineBooks{% endblock %}
+
+{% block conteudo %}
+<h1 class="h3 mb-4">{{ rotulo_plural }}</h1>
+
+<form method="get" class="row g-2 mb-4">
+    <div class="col-sm-6 col-md-4">
+        <input type="text" name="q" class="form-control" placeholder="Buscar por título..." value="{{ termo }}">
+    </div>
+    <div class="col-sm-4 col-md-3">
+        <select name="genero" class="form-select">
+            <option value="">Todos os gêneros</option>
+            {% for g in generos %}
+                <option value="{{ g.id }}" {% if genero_id == g.id|stringformat:"s" %}selected{% endif %}>{{ g.nome }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div class="col-sm-2">
+        <button type="submit" class="btn btn-primary">Filtrar</button>
+    </div>
+</form>
+
+<div class="row">
+    {% for item in itens %}{% include "catalog/_card.html" with item=item tipo=tipo %}{% empty %}
+        <p class="text-muted">Nenhum título encontrado com esses filtros.</p>
+    {% endfor %}
+</div>
+{% endblock %}

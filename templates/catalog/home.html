@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+
+{% block titulo %}CineBooks — Filmes, Séries e Livros{% endblock %}
+
+{% block conteudo %}
+<div class="p-5 mb-4 bg-body-tertiary rounded-3">
+    <h1 class="display-6 fw-bold">Bem-vindo(a) ao CineBooks</h1>
+    <p class="col-lg-8 fs-5">
+        Catálogo colaborativo de filmes, séries e livros. Explore, avalie e descubra
+        novos títulos avaliados pela nossa comunidade.
+    </p>
+</div>
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h2 class="h4 mb-0">🎬 Filmes recentes</h2>
+    <a href="{% url 'lista' 'filme' %}" class="btn btn-sm btn-outline-primary">Ver todos</a>
+</div>
+<div class="row">
+    {% for item in filmes %}{% include "catalog/_card.html" with item=item tipo="filme" %}{% empty %}
+        <p class="text-muted">Nenhum filme cadastrado ainda.</p>
+    {% endfor %}
+</div>
+
+<div class="d-flex justify-content-between align-items-center mb-3 mt-4">
+    <h2 class="h4 mb-0">📺 Séries recentes</h2>
+    <a href="{% url 'lista' 'serie' %}" class="btn btn-sm btn-outline-primary">Ver todas</a>
+</div>
+<div class="row">
+    {% for item in series %}{% include "catalog/_card.html" with item=item tipo="serie" %}{% empty %}
+        <p class="text-muted">Nenhuma série cadastrada ainda.</p>
+    {% endfor %}
+</div>
+
+<div class="d-flex justify-content-between align-items-center mb-3 mt-4">
+    <h2 class="h4 mb-0">📚 Livros recentes</h2>
+    <a href="{% url 'lista' 'livro' %}" class="btn btn-sm btn-outline-primary">Ver todos</a>
+</div>
+<div class="row">
+    {% for item in livros %}{% include "catalog/_card.html" with item=item tipo="livro" %}{% empty %}
+        <p class="text-muted">Nenhum livro cadastrado ainda.</p>
+    {% endfor %}
+</div>
+{% endblock %}

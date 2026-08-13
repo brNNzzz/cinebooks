@@ -1,0 +1,20 @@
+{% load static %}
+<div class="col-6 col-md-4 col-lg-3 mb-4">
+    <a href="{% url 'detalhe' tipo item.pk %}" class="text-decoration-none text-reset">
+        <div class="card card-titulo shadow-sm">
+            <img
+                src="{{ item.poster_url|default:'https://placehold.co/400x600/1f2937/ffffff?text=Sem+imagem' }}"
+                class="poster card-img-top" alt="Pôster de {{ item.titulo }}">
+            <div class="card-body">
+                <h6 class="card-title mb-1">{{ item.titulo }}</h6>
+                <p class="card-text text-muted small mb-1">{{ item.ano_lancamento }}</p>
+                {% if item.media_notas %}
+                    <span class="badge bg-warning text-dark nota-badge">⭐ {{ item.media_notas|floatformat:1 }}</span>
+                    <span class="text-muted small">({{ item.qtd_avaliacoes }})</span>
+                {% else %}
+                    <span class="text-muted small">Sem avaliações</span>
+                {% endif %}
+            </div>
+        </div>
+    </a>
+</div>

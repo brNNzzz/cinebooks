@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+
+{% block titulo %}Busca — CineBooks{% endblock %}
+
+{% block conteudo %}
+<h1 class="h3 mb-4">Resultados para "{{ termo }}"</h1>
+
+{% if not termo %}
+    <p class="text-muted">Digite algo na busca do topo da página.</p>
+{% else %}
+    <h2 class="h5">Filmes</h2>
+    <div class="row mb-3">
+        {% for item in resultados.filmes %}{% include "catalog/_card.html" with item=item tipo="filme" %}{% empty %}
+            <p class="text-muted">Nenhum filme encontrado.</p>
+        {% endfor %}
+    </div>
+
+    <h2 class="h5">Séries</h2>
+    <div class="row mb-3">
+        {% for item in resultados.series %}{% include "catalog/_card.html" with item=item tipo="serie" %}{% empty %}
+            <p class="text-muted">Nenhuma série encontrada.</p>
+        {% endfor %}
+    </div>
+
+    <h2 class="h5">Livros</h2>
+    <div class="row mb-3">
+        {% for item in resultados.livros %}{% include "catalog/_card.html" with item=item tipo="livro" %}{% empty %}
+            <p class="text-muted">Nenhum livro encontrado.</p>
+        {% endfor %}
+    </div>
+{% endif %}
+{% endblock %}
