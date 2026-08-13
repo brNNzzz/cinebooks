@@ -138,6 +138,10 @@ dos três. Isso evita duplicação de código nas views e no template.
 - Busca global (filmes + séries + livros de uma vez).
 - Painel administrativo (`/admin/`) para cadastrar/editar títulos com formulário pronto,
   sem precisar escrever HTML.
+- **Buscar e importar** (`/importar/`, só para usuários com "staff status"): busca um
+  filme/série/livro pelo título nas APIs do TMDB/Open Library e importa automaticamente
+  sinopse, ano, diretor/autor, gêneros e capa — sem digitar nada manualmente. Tem um
+  link "+ Adicionar título" no menu, visível só para a equipe.
 
 ## Possíveis melhorias (caso o professor pergunte "o que mais dava pra fazer")
 

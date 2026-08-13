@@ -1,11 +1,14 @@
 from django.contrib import messages
+from django.contrib.admin.views.decorators import staff_member_required
 from django.contrib.auth import login
 from django.contrib.auth.decorators import login_required
 from django.contrib.contenttypes.models import ContentType
 from django.db.models import Avg, Count, Q
 from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
+from django.views.decorators.http import require_POST
 
+from . import busca_externa
 from .forms import AvaliacaoForm, RegistroForm
 from .models import Avaliacao, Filme, Genero, Livro, Serie
 
@@ -121,6 +124,101 @@ def busca(request):
         resultados["livros"] = Livro.objects.filter(titulo__icontains=termo)
 
     return render(request, "catalog/busca.html", {"termo": termo, "resultados": resultados})
+
+
+@staff_member_required
+def importar_buscar(request):
+    """Página de busca+importação: só a equipe (staff) pode acessar."""
+    tipo = request.GET.get("tipo", "filme")
+    query = request.GET.get("q", "").strip()
+
+    resultados = []
+    if query:
+        if tipo == "filme":
+            resultados = busca_externa.buscar_filmes_series("movie", query)
+        elif tipo == "serie":
+            resultados = busca_externa.buscar_filmes_series("tv", query)
+        elif tipo == "livro":
+            resultados = busca_externa.buscar_livros(query)
+
+    contexto = {
+        "tipo": tipo,
+        "query": query,
+        "resultados": resultados,
+        "tmdb_configurado": busca_externa.tmdb_configurado(),
+    }
+    return render(request, "catalog/importar.html", contexto)
+
+
+def _importar_generos(obj, nomes_generos):
+    obj.generos.set([Genero.objects.get_or_create(nome=nome)[0] for nome in nomes_generos if nome])
+
+
+@staff_member_required
+@require_POST
+def importar_adicionar_filme(request, tmdb_id):
+    info = busca_externa.detalhes_filme(tmdb_id)
+    if not info or not info.get("titulo") or not info.get("ano_lancamento"):
+        messages.error(
+            request,
+            "Não foi possível importar esse filme agora (falha ao buscar no TMDB). Tente de novo em instantes.",
+        )
+        return redirect("importar_buscar")
+
+    generos = info.pop("generos", [])
+    obj, criado = Filme.objects.get_or_create(titulo=info["titulo"], defaults=info)
+    _importar_generos(obj, generos)
+    messages.success(
+        request, f'"{obj.titulo}" {"foi adicionado ao" if criado else "já estava no"} catálogo!'
+    )
+    return redirect("detalhe", tipo="filme", pk=obj.pk)
+
+
+@staff_member_required
+@require_POST
+def importar_adicionar_serie(request, tmdb_id):
+    info = busca_externa.detalhes_serie(tmdb_id)
+    if not info or not info.get("titulo") or not info.get("ano_lancamento"):
+        messages.error(
+            request,
+            "Não foi possível importar essa série agora (falha ao buscar no TMDB). Tente de novo em instantes.",
+        )
+        return redirect("importar_buscar")
+
+    generos = info.pop("generos", [])
+    obj, criado = Serie.objects.get_or_create(titulo=info["titulo"], defaults=info)
+    _importar_generos(obj, generos)
+    messages.success(
+        request, f'"{obj.titulo}" {"foi adicionada ao" if criado else "já estava no"} catálogo!'
+    )
+    return redirect("detalhe", tipo="serie", pk=obj.pk)
+
+
+@staff_member_required
+@require_POST
+def importar_adicionar_livro(request, olid):
+    titulo = request.POST.get("titulo", "").strip()
+    ano = request.POST.get("ano", "").strip()
+    if not titulo or not ano.isdigit():
+        messages.error(request, "Não foi possível importar esse livro (dados incompletos).")
+        return redirect("importar_buscar")
+
+    dados = {
+        "ano_lancamento": int(ano),
+        "autor": request.POST.get("autor", ""),
+        "editora": request.POST.get("editora", ""),
+        "poster_url": request.POST.get("poster_url", ""),
+        "sinopse": busca_externa.sinopse_livro(olid),
+    }
+    numero_paginas = request.POST.get("numero_paginas", "")
+    if numero_paginas.isdigit():
+        dados["numero_paginas"] = int(numero_paginas)
+
+    obj, criado = Livro.objects.get_or_create(titulo=titulo, defaults=dados)
+    messages.success(
+        request, f'"{obj.titulo}" {"foi adicionado ao" if criado else "já estava no"} catálogo!'
+    )
+    return redirect("detalhe", tipo="livro", pk=obj.pk)
 
 
 def registrar(request):
