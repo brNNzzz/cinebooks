@@ -97,7 +97,7 @@ dos três. Isso evita duplicação de código nas views e no template.
 - Painel administrativo (`/admin/`) para cadastrar/editar títulos com formulário pronto,
   sem precisar escrever HTML.
 
-## Possíveis melhorias (caso o professor pergunte "o que mais dava pra fazer")
+## Possíveis melhorias
 
 - Upload de imagem de pôster em vez de link (usando `ImageField`).
 - Paginação nas listagens (hoje mostra tudo de uma vez).
