@@ -116,6 +116,24 @@ criar um superusuário exige uma senha seria, então esse passo é manual:
    ```
 3. Pronto — use esse login em `https://cinebooks.onrender.com/admin/`.
 
+### Ativar as capas reais de filmes e séries (TMDB)
+
+O `render.yaml` já deixa uma variável `TMDB_API_KEY` reservada, mas vazia — o Render
+não preenche ela sozinho por segurança. Depois de criar sua chave gratuita (passo a
+passo no `README.md`, seção "Capas automáticas"):
+
+1. No painel do Render, abra o serviço **cinebooks** → aba **Environment**.
+2. Encontre `TMDB_API_KEY` e cole o valor da sua chave.
+3. Clique em **Save Changes** — isso já reinicia o serviço sozinho.
+4. Para buscar a capa dos títulos que já existem no banco (o catálogo de exemplo),
+   abra a aba **Shell** e rode:
+   ```bash
+   python manage.py buscar_capas
+   ```
+
+As capas dos livros já funcionam sem precisar de nada disso (Open Library não exige
+chave).
+
 ### Atualizando o site depois de mudanças
 
 Diferente do PythonAnywhere, aqui é automático: sempre que você rodar `git push`,
@@ -154,6 +172,9 @@ a ser um problema dentro do prazo de 30 dias.
    python manage.py createsuperuser
    python manage.py collectstatic
    ```
+   Se você já configurou a `TMDB_API_KEY` (defina com `export TMDB_API_KEY=sua-chave`
+   antes desses comandos), pode rodar também `python manage.py buscar_capas` para
+   garantir que todos os títulos fiquem com capa real.
 6. Vá na aba **Web** → **Add a new web app** → escolha seu domínio gratuito
    (`seu-usuario.pythonanywhere.com`) → **Manual configuration** → selecione a
    versão do Python que você usou no passo 4 (ex: 3.10).
@@ -172,6 +193,7 @@ a ser um problema dentro do prazo de 30 dias.
 
      os.environ['DJANGO_ALLOWED_HOSTS'] = 'seu-usuario.pythonanywhere.com'
      os.environ['DJANGO_DEBUG'] = 'False'
+     os.environ['TMDB_API_KEY'] = 'sua-chave-do-tmdb-aqui'  # opcional, ver README
      os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'cinebooks.settings')
 
      from django.core.wsgi import get_wsgi_application

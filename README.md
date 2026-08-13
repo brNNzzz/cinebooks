@@ -54,6 +54,48 @@ painel administrativo (`/admin/`) sem precisar criar um do zero:
 Recomendo trocar essa senha (ou criar a de vocês com `createsuperuser`) antes de
 apresentar o trabalho.
 
+## Capas automáticas (pôsteres reais de filmes, séries e livros)
+
+O site busca a capa de cada título automaticamente quando ele é cadastrado (seja pelo
+`seed_data`, seja pelo admin), sem precisar colar nenhum link manualmente:
+
+- **Livros:** usa a API do **Open Library**, que é gratuita e não precisa de nenhuma
+  chave — já funciona sem fazer nada.
+- **Filmes e séries:** usa a API do **TMDB** (The Movie Database), que também é
+  gratuita, mas exige criar uma chave própria (rapidinho, sem cartão de crédito):
+
+  1. Crie uma conta em **https://www.themoviedb.org/signup**.
+  2. Confirme o e-mail.
+  3. Vá em **Configurações** (clique no seu avatar) → **API** → **Create** →
+     escolha "Developer" → preencha o formulário curto (pode colocar "projeto
+     acadêmico" como finalidade) → aceite os termos.
+  4. Copie o valor de **"API Key (v3 auth)"**.
+  5. Configure essa chave como variável de ambiente chamada `TMDB_API_KEY` antes de
+     rodar o projeto:
+     ```bash
+     # Windows (cmd)
+     set TMDB_API_KEY=sua-chave-aqui
+
+     # Windows (PowerShell)
+     $env:TMDB_API_KEY="sua-chave-aqui"
+
+     # Mac/Linux
+     export TMDB_API_KEY=sua-chave-aqui
+     ```
+     (isso vale só para a sessão atual do terminal — se fechar e abrir de novo,
+     precisa configurar de novo, ou rodar o `set`/`export` sempre antes do
+     `python manage.py runserver`)
+
+Se o banco já tiver títulos sem capa (por exemplo, o `db.sqlite3` que já vem neste
+projeto), rode para buscar as capas que faltam:
+
+```bash
+python manage.py buscar_capas
+```
+
+Se a `TMDB_API_KEY` não estiver configurada, os filmes/séries simplesmente continuam
+sem capa real (o site mostra uma imagem padrão no lugar) — nada quebra.
+
 ## Estrutura do projeto
 
 ```
@@ -97,7 +139,7 @@ dos três. Isso evita duplicação de código nas views e no template.
 - Painel administrativo (`/admin/`) para cadastrar/editar títulos com formulário pronto,
   sem precisar escrever HTML.
 
-## Possíveis melhorias
+## Possíveis melhorias (caso o professor pergunte "o que mais dava pra fazer")
 
 - Upload de imagem de pôster em vez de link (usando `ImageField`).
 - Paginação nas listagens (hoje mostra tudo de uma vez).

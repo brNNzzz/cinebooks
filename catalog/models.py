@@ -82,6 +82,18 @@ class Filme(Titulo):
     def get_absolute_url(self):
         return reverse("filme_detalhe", args=[self.pk])
 
+    def save(self, *args, **kwargs):
+        # Se ninguém preencheu uma capa manualmente, tenta buscar uma real
+        # automaticamente (ver catalog/capas.py). Se falhar, não tem problema:
+        # o site usa uma imagem padrão no lugar.
+        if not self.poster_url:
+            from .capas import buscar_poster_filme
+
+            encontrado = buscar_poster_filme(self.titulo, self.ano_lancamento)
+            if encontrado:
+                self.poster_url = encontrado
+        super().save(*args, **kwargs)
+
 
 class Serie(Titulo):
     criador = models.CharField("criador(a)", max_length=150, blank=True)
@@ -93,6 +105,15 @@ class Serie(Titulo):
 
     def get_absolute_url(self):
         return reverse("serie_detalhe", args=[self.pk])
+
+    def save(self, *args, **kwargs):
+        if not self.poster_url:
+            from .capas import buscar_poster_serie
+
+            encontrado = buscar_poster_serie(self.titulo, self.ano_lancamento)
+            if encontrado:
+                self.poster_url = encontrado
+        super().save(*args, **kwargs)
 
 
 class Livro(Titulo):
@@ -106,6 +127,15 @@ class Livro(Titulo):
 
     def get_absolute_url(self):
         return reverse("livro_detalhe", args=[self.pk])
+
+    def save(self, *args, **kwargs):
+        if not self.poster_url:
+            from .capas import buscar_capa_livro
+
+            encontrada = buscar_capa_livro(self.titulo, self.autor)
+            if encontrada:
+                self.poster_url = encontrada
+        super().save(*args, **kwargs)
 
 
 class Avaliacao(models.Model):

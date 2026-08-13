@@ -21,6 +21,12 @@ services:
           property: connectionString
       - key: PYTHON_VERSION
         value: "3.12.7"
+      # Chave gratuita do TMDB para buscar capas de filmes/séries
+      # automaticamente. sync: false = o Render NÃO define um valor sozinho;
+      # você preenche manualmente no painel (aba Environment do serviço),
+      # depois de criar sua chave em themoviedb.org (veja o README).
+      - key: TMDB_API_KEY
+        sync: false
 
 databases:
   - name: cinebooks-db

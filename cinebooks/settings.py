@@ -41,6 +41,13 @@ DEBUG = os.environ.get("DJANGO_DEBUG", "True") == "True"
 _hosts_env = os.environ.get("DJANGO_ALLOWED_HOSTS", "")
 ALLOWED_HOSTS = [h.strip() for h in _hosts_env.split(",") if h.strip()]
 
+# Chave gratuita da API do TMDB (themoviedb.org), usada para buscar
+# automaticamente os pôsteres de filmes e séries. Veja o README para saber
+# como criar a sua. Sem essa variável definida, a busca de capas de
+# filmes/séries simplesmente não roda (livros continuam funcionando, pois
+# usam o Open Library, que não precisa de chave).
+TMDB_API_KEY = os.environ.get("TMDB_API_KEY", "")
+
 
 # Application definition
 

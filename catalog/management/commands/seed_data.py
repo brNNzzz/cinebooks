@@ -12,11 +12,10 @@ from django.core.management.base import BaseCommand
 
 from catalog.models import Filme, Genero, Livro, Serie
 
-
-def poster(texto, cor_fundo="1f2937", cor_texto="ffffff"):
-    """Gera uma URL de imagem-placeholder com o título escrito nela."""
-    texto_url = texto.replace(" ", "+")
-    return f"https://placehold.co/400x600/{cor_fundo}/{cor_texto}?text={texto_url}"
+# Não definimos poster_url aqui de propósito: deixando em branco, o método
+# save() de cada modelo (veja catalog/models.py e catalog/capas.py) busca a
+# capa real automaticamente (TMDB para filmes/séries, Open Library para
+# livros) na hora de criar o registro.
 
 
 FILMES = [
@@ -145,25 +144,19 @@ class Command(BaseCommand):
 
         for dados in FILMES:
             generos = dados.pop("generos")
-            obj, criado = Filme.objects.get_or_create(
-                titulo=dados["titulo"], defaults={**dados, "poster_url": poster(dados["titulo"])}
-            )
+            obj, criado = Filme.objects.get_or_create(titulo=dados["titulo"], defaults=dados)
             obj.generos.set([Genero.objects.get_or_create(nome=g)[0] for g in generos])
             total += criado
 
         for dados in SERIES:
             generos = dados.pop("generos")
-            obj, criado = Serie.objects.get_or_create(
-                titulo=dados["titulo"], defaults={**dados, "poster_url": poster(dados["titulo"])}
-            )
+            obj, criado = Serie.objects.get_or_create(titulo=dados["titulo"], defaults=dados)
             obj.generos.set([Genero.objects.get_or_create(nome=g)[0] for g in generos])
             total += criado
 
         for dados in LIVROS:
             generos = dados.pop("generos")
-            obj, criado = Livro.objects.get_or_create(
-                titulo=dados["titulo"], defaults={**dados, "poster_url": poster(dados["titulo"])}
-            )
+            obj, criado = Livro.objects.get_or_create(titulo=dados["titulo"], defaults=dados)
             obj.generos.set([Genero.objects.get_or_create(nome=g)[0] for g in generos])
             total += criado
 
