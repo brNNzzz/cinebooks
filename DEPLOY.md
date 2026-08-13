@@ -70,18 +70,69 @@ git push
 
 ## Parte 5 — Publicar o site na internet (link público)
 
-Recomendo o **PythonAnywhere**, porque o plano gratuito não "dorme" (fica sempre no
-ar) e funciona muito bem com o banco SQLite que já vem no projeto — não precisa
-configurar nenhum banco de dados separado. É o caminho mais simples para um projeto
-de faculdade.
+Uso o **Render** aqui: é bem mais visual (sem digitar comando em console), e a cada
+`git push` ele republica o site sozinho. O projeto já vem pronto para isso — inclui um
+arquivo `render.yaml` que descreve tudo (o site + um banco de dados PostgreSQL
+gratuito), então o Render cria os dois de uma vez só, com um clique.
 
-> Alternativa: o **Render** também tem plano gratuito e faz deploy automático a cada
-> `git push`, mas o site "dorme" depois de 15 minutos sem acesso (demora ~1 minuto pra
-> acordar de novo) e exigiria trocar o banco para PostgreSQL, que no plano grátis
-> expira depois de 30 dias. Fica de opção se você preferir deploy automático e não se
-> importar com esses limites.
+> **Por que trocamos o banco de SQLite para PostgreSQL nessa opção:** no plano
+> gratuito do Render, os arquivos do site (incluindo um banco SQLite) são apagados
+> toda vez que o site "dorme" por inatividade (a cada ~15 min sem acesso). Um banco
+> PostgreSQL separado não tem esse problema. A única pegadinha: o Postgres gratuito do
+> Render expira 30 dias após criado (dá pra recriar de graça depois, veja o aviso no
+> fim desta seção).
+>
+> Se preferir um site que nunca "dorme" e não se importa em mexer num console de
+> comandos, o **PythonAnywhere** continua sendo uma alternativa válida — o passo a
+> passo dele está mais abaixo, na Parte 6.
 
-### Passo a passo no PythonAnywhere
+### Passo a passo no Render
+
+1. Acesse **https://render.com** e crie uma conta (pode entrar direto com sua conta
+   do GitHub, fica mais rápido — clique em **Get Started** e depois **GitHub**).
+2. Autorize o Render a acessar seus repositórios (pode escolher "apenas este
+   repositório", não precisa dar acesso a todos).
+3. No painel do Render, clique em **New +** → **Blueprint**.
+4. Selecione o repositório do projeto (ex: `imdpringols`). O Render vai detectar
+   automaticamente o arquivo `render.yaml` e mostrar o que vai criar: um **Web
+   Service** chamado `cinebooks` e um banco **PostgreSQL** chamado `cinebooks-db`,
+   ambos no plano Free.
+5. Clique em **Apply** (ou **Create New Resources**, dependendo da versão da tela).
+6. Aguarde o build — na primeira vez demora uns 3 a 5 minutos. Você pode acompanhar
+   o progresso ao vivo na aba **Logs** do serviço `cinebooks`.
+7. Quando o deploy terminar, o Render mostra a URL do site no topo da página, algo
+   como `https://cinebooks.onrender.com` — é só clicar para abrir.
+
+### Criar seu usuário administrador no site publicado
+
+O `render.yaml` já roda as migrações e popula o catálogo de exemplo sozinho, mas
+criar um superusuário exige uma senha seria, então esse passo é manual:
+
+1. No painel do Render, abra o serviço **cinebooks** → aba **Shell** (é um terminal
+   dentro do navegador, não precisa instalar nada).
+2. Rode:
+   ```bash
+   python manage.py createsuperuser
+   ```
+3. Pronto — use esse login em `https://cinebooks.onrender.com/admin/`.
+
+### Atualizando o site depois de mudanças
+
+Diferente do PythonAnywhere, aqui é automático: sempre que você rodar `git push`,
+o Render detecta e já republica o site sozinho em alguns minutos. Não precisa fazer
+mais nada.
+
+### Sobre o banco de dados gratuito expirar em 30 dias
+
+O Render avisa por e-mail antes de expirar. Quando isso acontecer, basta criar um
+novo banco Postgres gratuito no painel (**New +** → **PostgreSQL**) e atualizar a
+variável de ambiente `DATABASE_URL` do serviço `cinebooks` (aba **Environment**) para
+apontar pro novo banco — só que, como o banco muda, os cadastros/avaliações feitos
+pelos usuários até ali seriam perdidos (o catálogo de exemplo volta sozinho, pois é
+recriado no próximo deploy). Para uma apresentação de trabalho, isso raramente chega
+a ser um problema dentro do prazo de 30 dias.
+
+## Parte 6 — Alternativa: PythonAnywhere (site nunca dorme, mas configuração manual)
 
 1. Crie uma conta grátis em **https://www.pythonanywhere.com** (plano "Beginner").
 2. No painel, abra um **Bash console** (aba Consoles → Bash).

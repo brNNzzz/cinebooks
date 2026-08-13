@@ -7,3 +7,4 @@ venv/
 env/
 *.sqlite3-journal
 .DS_Store
+staticfiles/
