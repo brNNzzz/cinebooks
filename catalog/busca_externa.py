@@ -95,8 +95,25 @@ def buscar_filmes_series(tipo_tmdb, query):
         return []
 
 
+MAX_ELENCO = 8  # quantos atores/atrizes principais trazer por título
+
+
+def _extrair_elenco(dados):
+    pessoas = []
+    for ator in (dados.get("credits", {}).get("cast") or [])[:MAX_ELENCO]:
+        foto_path = ator.get("profile_path")
+        pessoas.append(
+            {
+                "nome": ator.get("name", ""),
+                "foto_url": f"{TMDB_IMAGE_BASE_URL}{foto_path}" if foto_path else "",
+            }
+        )
+    return [p for p in pessoas if p["nome"]]
+
+
 def detalhes_filme(tmdb_id):
-    """Devolve um dict com os dados do filme, ou None se a busca falhar."""
+    """Devolve um dict com os dados completos do filme (inclusive elenco),
+    ou None se a busca falhar."""
     try:
         dados = _tmdb_get(f"/movie/{tmdb_id}", {"append_to_response": "credits"})
     except (requests.RequestException, ValueError) as erro:
@@ -118,13 +135,15 @@ def detalhes_filme(tmdb_id):
         "duracao_minutos": dados.get("runtime") or None,
         "poster_url": f"{TMDB_IMAGE_BASE_URL}{poster_path}" if poster_path else "",
         "generos": [g["name"].title() for g in dados.get("genres") or []],
+        "elenco": _extrair_elenco(dados),
     }
 
 
 def detalhes_serie(tmdb_id):
-    """Devolve um dict com os dados da série, ou None se a busca falhar."""
+    """Devolve um dict com os dados completos da série (inclusive elenco),
+    ou None se a busca falhar."""
     try:
-        dados = _tmdb_get(f"/tv/{tmdb_id}")
+        dados = _tmdb_get(f"/tv/{tmdb_id}", {"append_to_response": "credits"})
     except (requests.RequestException, ValueError) as erro:
         logger.warning("Falha ao buscar detalhes da série %r no TMDB: %s", tmdb_id, erro)
         return None
@@ -140,6 +159,7 @@ def detalhes_serie(tmdb_id):
         "numero_temporadas": dados.get("number_of_seasons") or None,
         "poster_url": f"{TMDB_IMAGE_BASE_URL}{poster_path}" if poster_path else "",
         "generos": [g["name"].title() for g in dados.get("genres") or []],
+        "elenco": _extrair_elenco(dados),
     }
 
 
@@ -152,8 +172,8 @@ def buscar_livros(query):
             params={
                 "q": query,
                 "limit": 10,
-                "fields": "key,title,first_publish_year,author_name,cover_i,publisher,"
-                "number_of_pages_median",
+                "fields": "key,title,first_publish_year,author_name,author_key,cover_i,"
+                "publisher,number_of_pages_median",
             },
             timeout=TIMEOUT_SEGUNDOS,
         )
@@ -161,12 +181,18 @@ def buscar_livros(query):
         resultados = []
         for doc in resposta.json().get("docs") or []:
             cover_id = doc.get("cover_i")
+            author_key = (doc.get("author_key") or [""])[0]
             resultados.append(
                 {
                     "id": doc.get("key", "").replace("/works/", ""),
                     "titulo": doc.get("title", ""),
                     "ano": doc.get("first_publish_year") or "",
                     "autor": (doc.get("author_name") or [""])[0],
+                    # Foto do autor: o Open Library monta a URL a partir do
+                    # ID do autor, sem precisar de outra chamada à API.
+                    "autor_foto_url": f"https://covers.openlibrary.org/a/olid/{author_key}-M.jpg"
+                    if author_key
+                    else "",
                     "editora": (doc.get("publisher") or [""])[0][:150],
                     "numero_paginas": doc.get("number_of_pages_median"),
                     "poster_url": f"https://covers.openlibrary.org/b/id/{cover_id}-L.jpg"

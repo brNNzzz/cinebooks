@@ -142,6 +142,13 @@ dos três. Isso evita duplicação de código nas views e no template.
   filme/série/livro pelo título nas APIs do TMDB/Open Library e importa automaticamente
   sinopse, ano, diretor/autor, gêneros e capa — sem digitar nada manualmente. Tem um
   link "+ Adicionar título" no menu, visível só para a equipe.
+- **Elenco (atores) e autor(a) com foto**: cada filme/série mostra o elenco principal
+  (nome + foto) e cada livro mostra o(a) autor(a) com foto, quando disponível. Pra não
+  deixar a busca lenta, esses dados "extras" (elenco e uma sinopse mais completa) são
+  buscados só na **primeira vez que alguém abre a página** daquele título — depois
+  ficam salvos no banco e aparecem na hora pra todo mundo. Isso é controlado pelo campo
+  `dados_completos` do título (ver `catalog/models.py` e a função
+  `_garantir_dados_completos` em `catalog/views.py`).
 
 ## Possíveis melhorias (caso o professor pergunte "o que mais dava pra fazer")
 

@@ -1,3 +1,5 @@
+import logging
+
 from django.contrib import messages
 from django.contrib.admin.views.decorators import staff_member_required
 from django.contrib.auth import login
@@ -10,7 +12,9 @@ from django.views.decorators.http import require_POST
 
 from . import busca_externa
 from .forms import AvaliacaoForm, RegistroForm
-from .models import Avaliacao, Filme, Genero, Livro, Serie
+from .models import Avaliacao, Filme, Genero, Livro, Pessoa, Serie
+
+logger = logging.getLogger(__name__)
 
 # Mapa usado nas URLs para saber a qual modelo/rótulo cada "tipo" corresponde.
 TIPOS = {
@@ -63,6 +67,12 @@ def detalhe(request, tipo, pk):
     if info is None:
         raise Http404("Categoria não encontrada")
     item = get_object_or_404(info["model"], pk=pk)
+
+    # Se ainda não temos os dados completos desse título (elenco, sinopse
+    # maior...), busca agora — só na primeira visita à página; depois fica
+    # salvo e as próximas pessoas que abrirem já veem tudo na hora.
+    if not item.dados_completos:
+        _garantir_dados_completos(item, tipo)
 
     minha_avaliacao = None
     if request.user.is_authenticated:
@@ -118,6 +128,149 @@ def _importar_generos(obj, nomes_generos):
     obj.generos.set([Genero.objects.get_or_create(nome=nome)[0] for nome in nomes_generos if nome])
 
 
+def _importar_pessoa(nome, foto_url=""):
+    """Cria (ou reaproveita) uma Pessoa pelo nome. Se ela já existir mas
+    ainda não tiver foto, e agora encontramos uma, completa."""
+    nome = (nome or "").strip()
+    if not nome:
+        return None
+    pessoa, _ = Pessoa.objects.get_or_create(nome=nome, defaults={"foto_url": foto_url})
+    if foto_url and not pessoa.foto_url:
+        pessoa.foto_url = foto_url
+        pessoa.save()
+    return pessoa
+
+
+def _importar_elenco(obj, lista_elenco):
+    pessoas = [
+        _importar_pessoa(p.get("nome", ""), p.get("foto_url", "")) for p in lista_elenco or []
+    ]
+    obj.elenco.set([p for p in pessoas if p])
+
+
+def _garantir_dados_completos(item, tipo):
+    """Completa elenco, sinopse maior etc. de um título que ainda não tem
+    `dados_completos=True`. Só roda de fato na primeira visita à página —
+    depois disso fica salvo no banco e as próximas visitas nem chamam essa
+    função (veja a checagem em `detalhe()`). Qualquer erro aqui é só
+    registrado no log: a página continua funcionando com os dados que já
+    tinha, e tenta completar de novo na próxima visita."""
+    try:
+        if tipo == "filme":
+            _completar_filme(item)
+        elif tipo == "serie":
+            _completar_serie(item)
+        elif tipo == "livro":
+            _completar_livro(item)
+    except Exception:
+        logger.exception("Falha ao completar dados de %s #%s", tipo, item.pk)
+
+
+def _completar_filme(item):
+    tmdb_id = item.id_externo
+    if not tmdb_id:
+        encontrados = busca_externa.buscar_filmes_series("movie", item.titulo)
+        correspondente = next(
+            (r for r in encontrados if r["titulo"].lower() == item.titulo.lower()), None
+        )
+        if correspondente:
+            tmdb_id = correspondente["id"]
+            item.id_externo = str(tmdb_id)
+            item.save(update_fields=["id_externo"])
+    if not tmdb_id:
+        # Não achamos esse título na API — marca como completo pra não ficar
+        # tentando de novo a cada visita à página.
+        item.dados_completos = True
+        item.save(update_fields=["dados_completos"])
+        return
+
+    info = busca_externa.detalhes_filme(tmdb_id)
+    if not info:
+        return  # falha temporária (rede/API fora do ar) — tenta de novo na próxima visita
+
+    elenco = info.pop("elenco", [])
+    generos = info.pop("generos", [])
+    if not item.diretor:
+        item.diretor = info.get("diretor", "")
+    if not item.duracao_minutos:
+        item.duracao_minutos = info.get("duracao_minutos")
+    if info.get("sinopse") and len(info["sinopse"]) > len(item.sinopse or ""):
+        item.sinopse = info["sinopse"]
+    if not item.poster_url and info.get("poster_url"):
+        item.poster_url = info["poster_url"]
+    item.dados_completos = True
+    item.save()
+    if elenco:
+        _importar_elenco(item, elenco)
+    if generos:
+        _importar_generos(item, generos)
+
+
+def _completar_serie(item):
+    tmdb_id = item.id_externo
+    if not tmdb_id:
+        encontrados = busca_externa.buscar_filmes_series("tv", item.titulo)
+        correspondente = next(
+            (r for r in encontrados if r["titulo"].lower() == item.titulo.lower()), None
+        )
+        if correspondente:
+            tmdb_id = correspondente["id"]
+            item.id_externo = str(tmdb_id)
+            item.save(update_fields=["id_externo"])
+    if not tmdb_id:
+        item.dados_completos = True
+        item.save(update_fields=["dados_completos"])
+        return
+
+    info = busca_externa.detalhes_serie(tmdb_id)
+    if not info:
+        return
+
+    elenco = info.pop("elenco", [])
+    generos = info.pop("generos", [])
+    if not item.criador:
+        item.criador = info.get("criador", "")
+    if not item.numero_temporadas:
+        item.numero_temporadas = info.get("numero_temporadas")
+    if info.get("sinopse") and len(info["sinopse"]) > len(item.sinopse or ""):
+        item.sinopse = info["sinopse"]
+    if not item.poster_url and info.get("poster_url"):
+        item.poster_url = info["poster_url"]
+    item.dados_completos = True
+    item.save()
+    if elenco:
+        _importar_elenco(item, elenco)
+    if generos:
+        _importar_generos(item, generos)
+
+
+def _completar_livro(item):
+    olid = item.id_externo
+    if not olid:
+        encontrados = busca_externa.buscar_livros(item.titulo)
+        correspondente = next(
+            (r for r in encontrados if r["titulo"].lower() == item.titulo.lower()), None
+        )
+        if correspondente:
+            olid = correspondente["id"]
+            item.id_externo = olid
+            item.save(update_fields=["id_externo"])
+            if not item.autor_pessoa and correspondente.get("autor"):
+                item.autor_pessoa = _importar_pessoa(
+                    correspondente["autor"], correspondente.get("autor_foto_url", "")
+                )
+    if not olid:
+        item.dados_completos = True
+        item.save(update_fields=["dados_completos"])
+        return
+
+    sinopse = busca_externa.sinopse_livro(olid)
+    if sinopse and len(sinopse) > len(item.sinopse or ""):
+        item.sinopse = sinopse
+    item.dados_completos = True
+    item.save()
+
+
 # Quantos resultados "novos" (que ainda não estão no catálogo) a busca tenta
 # importar automaticamente por categoria. Como a importação "rápida" (usada
 # na busca pública) não faz nenhuma chamada extra de API, esse número pode
@@ -128,8 +281,8 @@ LIMITE_IMPORTACAO_AUTOMATICA = 10
 def _criar_filme_rapido(resultado_busca):
     """Cria o Filme só com os dados que já vieram na busca (sem chamada
     extra à API) — usado na busca pública, pra ficar rápida. Diretor e
-    duração ficam em branco; dá pra completar depois pelo admin ou
-    reimportando pela página /importar/ (que traz os dados completos)."""
+    elenco ficam pra depois: a própria página de detalhe completa isso
+    sozinha na primeira vez que alguém abrir (veja _garantir_dados_completos)."""
     titulo = (resultado_busca.get("titulo") or "").strip()
     ano = resultado_busca.get("ano")
     if not titulo or not ano:
@@ -138,6 +291,7 @@ def _criar_filme_rapido(resultado_busca):
         "ano_lancamento": int(ano),
         "sinopse": resultado_busca.get("sinopse", ""),
         "poster_url": resultado_busca.get("poster_url", ""),
+        "id_externo": str(resultado_busca.get("id", "")),
     }
     obj, _ = Filme.objects.get_or_create(titulo=titulo, defaults=dados)
     _importar_generos(obj, resultado_busca.get("generos", []))
@@ -153,6 +307,7 @@ def _criar_serie_rapida(resultado_busca):
         "ano_lancamento": int(ano),
         "sinopse": resultado_busca.get("sinopse", ""),
         "poster_url": resultado_busca.get("poster_url", ""),
+        "id_externo": str(resultado_busca.get("id", "")),
     }
     obj, _ = Serie.objects.get_or_create(titulo=titulo, defaults=dados)
     _importar_generos(obj, resultado_busca.get("generos", []))
@@ -160,8 +315,9 @@ def _criar_serie_rapida(resultado_busca):
 
 
 def _criar_livro_rapido(resultado_busca):
-    """Cria o Livro só com os dados da busca (sem buscar a sinopse separada,
-    que é uma chamada extra) — usado na busca pública, pra ficar rápida."""
+    """Cria o Livro com os dados da busca. A foto do autor já vem de graça
+    (o Open Library monta a URL sem chamada extra); a sinopse completa fica
+    pra quando alguém abrir a página do livro."""
     titulo = (resultado_busca.get("titulo") or "").strip()
     ano = resultado_busca.get("ano")
     if not titulo or not ano:
@@ -171,22 +327,32 @@ def _criar_livro_rapido(resultado_busca):
         "autor": resultado_busca.get("autor", ""),
         "editora": resultado_busca.get("editora", ""),
         "poster_url": resultado_busca.get("poster_url", ""),
+        "id_externo": resultado_busca.get("id", ""),
     }
     if resultado_busca.get("numero_paginas"):
         dados["numero_paginas"] = resultado_busca["numero_paginas"]
     obj, _ = Livro.objects.get_or_create(titulo=titulo, defaults=dados)
+    if resultado_busca.get("autor"):
+        obj.autor_pessoa = _importar_pessoa(resultado_busca["autor"], resultado_busca.get("autor_foto_url", ""))
+        obj.save()
     return obj
 
 
 def _criar_filme_do_tmdb(tmdb_id):
-    """Busca os detalhes completos do filme no TMDB e salva no catálogo.
+    """Busca os detalhes completos do filme no TMDB (inclusive elenco) e
+    salva no catálogo já com dados_completos=True — quem importar manualmente
+    pela tela de staff não precisa esperar a primeira visita completar nada.
     Devolve o objeto Filme criado (ou já existente), ou None se falhar."""
     info = busca_externa.detalhes_filme(tmdb_id)
     if not info or not info.get("titulo") or not info.get("ano_lancamento"):
         return None
     generos = info.pop("generos", [])
+    elenco = info.pop("elenco", [])
+    info["id_externo"] = str(tmdb_id)
+    info["dados_completos"] = True
     obj, _ = Filme.objects.get_or_create(titulo=info["titulo"], defaults=info)
     _importar_generos(obj, generos)
+    _importar_elenco(obj, elenco)
     return obj
 
 
@@ -195,8 +361,12 @@ def _criar_serie_do_tmdb(tmdb_id):
     if not info or not info.get("titulo") or not info.get("ano_lancamento"):
         return None
     generos = info.pop("generos", [])
+    elenco = info.pop("elenco", [])
+    info["id_externo"] = str(tmdb_id)
+    info["dados_completos"] = True
     obj, _ = Serie.objects.get_or_create(titulo=info["titulo"], defaults=info)
     _importar_generos(obj, generos)
+    _importar_elenco(obj, elenco)
     return obj
 
 
@@ -212,10 +382,17 @@ def _criar_livro_do_openlibrary(resultado_busca):
         "editora": resultado_busca.get("editora", ""),
         "poster_url": resultado_busca.get("poster_url", ""),
         "sinopse": busca_externa.sinopse_livro(resultado_busca.get("id", "")),
+        "id_externo": resultado_busca.get("id", ""),
+        "dados_completos": True,
     }
     if resultado_busca.get("numero_paginas"):
         dados["numero_paginas"] = resultado_busca["numero_paginas"]
     obj, _ = Livro.objects.get_or_create(titulo=titulo, defaults=dados)
+    if resultado_busca.get("autor"):
+        obj.autor_pessoa = _importar_pessoa(
+            resultado_busca["autor"], resultado_busca.get("autor_foto_url", "")
+        )
+        obj.save()
     return obj
 
 

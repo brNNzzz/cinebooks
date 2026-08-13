@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Avaliacao, Filme, Genero, Livro, Serie
+from .models import Avaliacao, Filme, Genero, Livro, Pessoa, Serie
 
 
 @admin.register(Genero)
@@ -8,28 +8,35 @@ class GeneroAdmin(admin.ModelAdmin):
     search_fields = ["nome"]
 
 
+@admin.register(Pessoa)
+class PessoaAdmin(admin.ModelAdmin):
+    list_display = ["nome", "foto_url"]
+    search_fields = ["nome"]
+
+
 @admin.register(Filme)
 class FilmeAdmin(admin.ModelAdmin):
-    list_display = ["titulo", "ano_lancamento", "diretor", "duracao_minutos"]
-    list_filter = ["generos", "ano_lancamento"]
+    list_display = ["titulo", "ano_lancamento", "diretor", "duracao_minutos", "dados_completos"]
+    list_filter = ["generos", "ano_lancamento", "dados_completos"]
     search_fields = ["titulo", "diretor"]
-    filter_horizontal = ["generos"]
+    filter_horizontal = ["generos", "elenco"]
 
 
 @admin.register(Serie)
 class SerieAdmin(admin.ModelAdmin):
-    list_display = ["titulo", "ano_lancamento", "criador", "numero_temporadas"]
-    list_filter = ["generos", "ano_lancamento"]
+    list_display = ["titulo", "ano_lancamento", "criador", "numero_temporadas", "dados_completos"]
+    list_filter = ["generos", "ano_lancamento", "dados_completos"]
     search_fields = ["titulo", "criador"]
-    filter_horizontal = ["generos"]
+    filter_horizontal = ["generos", "elenco"]
 
 
 @admin.register(Livro)
 class LivroAdmin(admin.ModelAdmin):
-    list_display = ["titulo", "ano_lancamento", "autor", "editora"]
-    list_filter = ["generos", "ano_lancamento"]
+    list_display = ["titulo", "ano_lancamento", "autor", "editora", "dados_completos"]
+    list_filter = ["generos", "ano_lancamento", "dados_completos"]
     search_fields = ["titulo", "autor"]
     filter_horizontal = ["generos"]
+    autocomplete_fields = ["autor_pessoa"]
 
 
 @admin.register(Avaliacao)

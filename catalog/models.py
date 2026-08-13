@@ -33,6 +33,23 @@ class Genero(models.Model):
         return self.nome
 
 
+class Pessoa(models.Model):
+    """Um ator/atriz (elenco de filmes/séries) ou autor(a) de livro. Uma
+    tabela só, reaproveitada pelos três tipos de título, pra não repetir
+    nome/foto de quem aparece em mais de uma obra."""
+
+    nome = models.CharField("nome", max_length=150, unique=True)
+    foto_url = models.URLField("URL da foto", blank=True)
+
+    class Meta:
+        verbose_name = "pessoa"
+        verbose_name_plural = "pessoas"
+        ordering = ["nome"]
+
+    def __str__(self):
+        return self.nome
+
+
 class Titulo(models.Model):
     """Campos comuns a Filme, Serie e Livro. Não gera tabela própria."""
 
@@ -46,6 +63,15 @@ class Titulo(models.Model):
     )
     generos = models.ManyToManyField(Genero, verbose_name="gêneros", blank=True)
     criado_em = models.DateTimeField("adicionado em", auto_now_add=True)
+
+    # Guarda o ID do título na API externa (TMDB para filme/série, Open
+    # Library para livro). Usado depois pra completar os dados (elenco,
+    # sinopse maior) sem precisar buscar o título de novo pelo nome.
+    id_externo = models.CharField("ID na API externa", max_length=50, blank=True)
+    # Fica True depois que já buscamos os dados completos (elenco, sinopse
+    # detalhada) desse título pelo menos uma vez. Enquanto for False, a
+    # página de detalhe tenta completar automaticamente na próxima visita.
+    dados_completos = models.BooleanField("dados completos", default=False)
 
     # Ligação genérica com Avaliacao (não cria coluna no banco, é só um atalho
     # para conseguirmos fazer `filme.avaliacoes.all()`)
@@ -74,6 +100,7 @@ class Titulo(models.Model):
 class Filme(Titulo):
     diretor = models.CharField("diretor(a)", max_length=150, blank=True)
     duracao_minutos = models.PositiveIntegerField("duração (minutos)", null=True, blank=True)
+    elenco = models.ManyToManyField(Pessoa, verbose_name="elenco", blank=True, related_name="filmes")
 
     class Meta(Titulo.Meta):
         verbose_name = "filme"
@@ -98,6 +125,7 @@ class Filme(Titulo):
 class Serie(Titulo):
     criador = models.CharField("criador(a)", max_length=150, blank=True)
     numero_temporadas = models.PositiveIntegerField("número de temporadas", null=True, blank=True)
+    elenco = models.ManyToManyField(Pessoa, verbose_name="elenco", blank=True, related_name="series")
 
     class Meta(Titulo.Meta):
         verbose_name = "série"
@@ -120,6 +148,16 @@ class Livro(Titulo):
     autor = models.CharField("autor(a)", max_length=150, blank=True)
     editora = models.CharField("editora", max_length=150, blank=True)
     numero_paginas = models.PositiveIntegerField("número de páginas", null=True, blank=True)
+    # Além do nome em texto (campo "autor" acima, usado pra busca/filtro),
+    # guardamos um link pra Pessoa quando tivermos a foto de quem escreveu.
+    autor_pessoa = models.ForeignKey(
+        Pessoa,
+        verbose_name="autor(a) (com foto)",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="livros",
+    )
 
     class Meta(Titulo.Meta):
         verbose_name = "livro"

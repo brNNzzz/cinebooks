@@ -38,8 +38,38 @@
         </ul>
 
         <p>{{ item.sinopse|default:"Sem sinopse cadastrada." }}</p>
+
+        {% if tipo == "livro" and item.autor_pessoa %}
+            <div class="d-flex align-items-center gap-2 mt-3">
+                {% if item.autor_pessoa.foto_url %}
+                    <img src="{{ item.autor_pessoa.foto_url }}" alt="Foto de {{ item.autor_pessoa.nome }}"
+                         class="rounded-circle" style="width:56px;height:56px;object-fit:cover;">
+                {% endif %}
+                <div>
+                    <div class="text-muted small">Autor(a)</div>
+                    <strong>{{ item.autor_pessoa.nome }}</strong>
+                </div>
+            </div>
+        {% endif %}
     </div>
 </div>
+
+{% if tipo == "filme" or tipo == "serie" %}
+    {% if item.elenco.all %}
+        <hr>
+        <h2 class="h4 mb-3">Elenco</h2>
+        <div class="row row-cols-2 row-cols-sm-4 row-cols-md-6 g-3 mb-2">
+            {% for pessoa in item.elenco.all %}
+                <div class="col text-center">
+                    <img src="{{ pessoa.foto_url|default:'https://placehold.co/150x150/1f2937/ffffff?text=?' }}"
+                         alt="Foto de {{ pessoa.nome }}" class="rounded-circle mb-1"
+                         style="width:72px;height:72px;object-fit:cover;">
+                    <div class="small">{{ pessoa.nome }}</div>
+                </div>
+            {% endfor %}
+        </div>
+    {% endif %}
+{% endif %}
 
 <hr>
 
