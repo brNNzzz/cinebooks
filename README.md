@@ -43,16 +43,6 @@ python3 manage.py runserver
 
 Depois disso, acesse **http://127.0.0.1:8000/** no navegador.
 
-### Login de administrador já criado
-
-Um usuário admin já vem configurado no banco de dados enviado, pra vocês acessarem o
-painel administrativo (`/admin/`) sem precisar criar um do zero:
-
-- **usuário:** `admin`
-- **senha:** `admin1234`
-
-Recomendo trocar essa senha (ou criar a de vocês com `createsuperuser`) antes de
-apresentar o trabalho.
 
 ## Capas automáticas (pôsteres reais de filmes, séries e livros)
 
@@ -242,7 +232,7 @@ dos três. Isso evita duplicação de código nas views e no template.
   de um título recém-cadastrado são completados em segundo plano, sem travar a
   navegação de quem está vendo a página.
 
-## Possíveis melhorias (caso o professor pergunte "o que mais dava pra fazer")
+## Possíveis melhorias
 
 - Paginação nas listagens (hoje mostra tudo de uma vez).
 - API REST (com Django REST Framework) para consumir os dados de um app mobile, por exemplo.
