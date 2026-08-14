@@ -75,6 +75,14 @@ def _idioma_tmdb_atual(request):
     return IDIOMAS[_idioma_atual(request)]["tmdb"]
 
 
+# Guarda quais títulos já têm uma busca de "completar dados" rodando agora,
+# pra não disparar várias threads fazendo o mesmo trabalho em paralelo se
+# várias pessoas (ou a mesma pessoa recarregando várias vezes) abrirem a
+# mesma página antes da primeira busca terminar.
+_COMPLETANDO_AGORA = set()
+_COMPLETANDO_AGORA_LOCK = threading.Lock()
+
+
 def _completar_em_segundo_plano(pk, model, tipo, idioma_tmdb):
     """Roda `_garantir_dados_completos` numa thread separada, SEM travar a
     resposta da página. Antes disso rodava direto dentro da view: se a API
@@ -82,6 +90,11 @@ def _completar_em_segundo_plano(pk, model, tipo, idioma_tmdb):
     página carregar. Agora a página aparece na hora com o que já temos, e
     elenco/notas completam sozinhos por trás — na próxima vez que a pessoa
     (ou outra) abrir a mesma página, já vem tudo pronto."""
+    chave = (model.__name__, pk)
+    with _COMPLETANDO_AGORA_LOCK:
+        if chave in _COMPLETANDO_AGORA:
+            return  # já tem uma busca rodando pra esse título, não duplica
+        _COMPLETANDO_AGORA.add(chave)
     try:
         item = model.objects.get(pk=pk)
         _garantir_dados_completos(item, tipo, idioma_tmdb)
@@ -93,6 +106,8 @@ def _completar_em_segundo_plano(pk, model, tipo, idioma_tmdb):
         # Essa thread abre sua própria conexão com o banco; sem fechar aqui,
         # ela ficaria pendurada depois que a thread termina.
         connections.close_all()
+        with _COMPLETANDO_AGORA_LOCK:
+            _COMPLETANDO_AGORA.discard(chave)
 
 
 def detalhe(request, tipo, pk):
@@ -204,13 +219,28 @@ def _garantir_dados_completos(item, tipo, idioma_tmdb=None):
         logger.exception("Falha ao completar dados de %s #%s", tipo, item.pk)
 
 
+def _melhor_correspondencia(encontrados, item):
+    """Escolhe qual resultado da busca é esse título. Preferimos um título
+    IDÊNTICO, mas isso costuma falhar quando o idioma muda o texto do título
+    (ex: item salvo como "Matrix" e a busca em inglês devolve "The Matrix")
+    — nesse caso, sem essa função, o site simplesmente desistia de achar o
+    título e ficava pra sempre sem elenco/sinopse/tradução. Como reserva,
+    usamos o resultado com o mesmo ano de lançamento, ou o primeiro da lista
+    (o TMDB já ordena por relevância)."""
+    if not encontrados:
+        return None
+    for r in encontrados:
+        if r["titulo"].lower() == item.titulo.lower():
+            return r
+    mesmo_ano = [r for r in encontrados if str(r.get("ano")) == str(item.ano_lancamento)]
+    return (mesmo_ano or encontrados)[0]
+
+
 def _completar_filme(item, idioma_tmdb):
     tmdb_id = item.id_externo
     if not tmdb_id:
         encontrados = busca_externa.buscar_filmes_series("movie", item.titulo, idioma=idioma_tmdb)
-        correspondente = next(
-            (r for r in encontrados if r["titulo"].lower() == item.titulo.lower()), None
-        )
+        correspondente = _melhor_correspondencia(encontrados, item)
         if correspondente:
             tmdb_id = correspondente["id"]
             item.id_externo = str(tmdb_id)
@@ -251,9 +281,7 @@ def _completar_serie(item, idioma_tmdb):
     tmdb_id = item.id_externo
     if not tmdb_id:
         encontrados = busca_externa.buscar_filmes_series("tv", item.titulo, idioma=idioma_tmdb)
-        correspondente = next(
-            (r for r in encontrados if r["titulo"].lower() == item.titulo.lower()), None
-        )
+        correspondente = _melhor_correspondencia(encontrados, item)
         if correspondente:
             tmdb_id = correspondente["id"]
             item.id_externo = str(tmdb_id)
@@ -292,9 +320,7 @@ def _completar_livro(item):
     olid = item.id_externo
     if not olid:
         encontrados = busca_externa.buscar_livros(item.titulo)
-        correspondente = next(
-            (r for r in encontrados if r["titulo"].lower() == item.titulo.lower()), None
-        )
+        correspondente = _melhor_correspondencia(encontrados, item)
         if correspondente:
             olid = correspondente["id"]
             item.id_externo = olid
