@@ -1,6 +1,7 @@
 import logging
 import threading
 from collections import Counter
+from concurrent.futures import ThreadPoolExecutor
 
 from django.contrib import messages
 from django.contrib.admin.views.decorators import staff_member_required
@@ -126,6 +127,14 @@ def detalhe(request, tipo, pk):
             daemon=True,
         ).start()
 
+    # As notas (público/crítica) a gente busca NA HORA, mesmo sem esperar o
+    # resto (elenco, sinopse maior) — é só 1 chamada rápida ao OMDb, então dá
+    # pra fazer isso sem travar a página, e assim a nota já aparece na
+    # primeira visita em vez de só depois que o resto terminar de completar
+    # em segundo plano.
+    if tipo in ("filme", "serie") and item.nota_publico is None and item.nota_critica is None:
+        _garantir_notas_omdb(item)
+
     minha_avaliacao = None
     if request.user.is_authenticated:
         content_type = ContentType.objects.get_for_model(info["model"])
@@ -219,6 +228,25 @@ def _garantir_dados_completos(item, tipo, idioma_tmdb=None):
         logger.exception("Falha ao completar dados de %s #%s", tipo, item.pk)
 
 
+def _garantir_notas_omdb(item):
+    """Busca as notas de público/crítica no OMDb e salva, se ainda não
+    tiver. Feito separado do resto do "completar dados" (elenco, sinopse)
+    porque é só 1 chamada rápida — dá pra fazer na hora, sem precisar
+    esperar a thread de segundo plano, então a nota já aparece na primeira
+    visita à página."""
+    if not busca_externa.omdb_configurado():
+        return
+    try:
+        notas = busca_externa.buscar_notas_omdb(item.titulo, item.ano_lancamento)
+    except Exception:
+        logger.exception("Falha ao buscar notas do OMDb pra %r", item.titulo)
+        return
+    if notas.get("nota_publico") is not None or notas.get("nota_critica") is not None:
+        item.nota_publico = notas.get("nota_publico")
+        item.nota_critica = notas.get("nota_critica")
+        item.save(update_fields=["nota_publico", "nota_critica"])
+
+
 def _melhor_correspondencia(encontrados, item):
     """Escolhe qual resultado da busca é esse título. Preferimos um título
     IDÊNTICO, mas isso costuma falhar quando o idioma muda o texto do título
@@ -266,11 +294,10 @@ def _completar_filme(item, idioma_tmdb):
         item.sinopse = info["sinopse"]
     if not item.poster_url and info.get("poster_url"):
         item.poster_url = info["poster_url"]
-    notas = busca_externa.buscar_notas_omdb(item.titulo, item.ano_lancamento)
-    item.nota_publico = notas.get("nota_publico")
-    item.nota_critica = notas.get("nota_critica")
     item.dados_completos = True
     item.save()
+    if item.nota_publico is None and item.nota_critica is None:
+        _garantir_notas_omdb(item)
     if elenco:
         _importar_elenco(item, elenco)
     if generos:
@@ -305,11 +332,10 @@ def _completar_serie(item, idioma_tmdb):
         item.sinopse = info["sinopse"]
     if not item.poster_url and info.get("poster_url"):
         item.poster_url = info["poster_url"]
-    notas = busca_externa.buscar_notas_omdb(item.titulo, item.ano_lancamento)
-    item.nota_publico = notas.get("nota_publico")
-    item.nota_critica = notas.get("nota_critica")
     item.dados_completos = True
     item.save()
+    if item.nota_publico is None and item.nota_critica is None:
+        _garantir_notas_omdb(item)
     if elenco:
         _importar_elenco(item, elenco)
     if generos:
@@ -523,7 +549,23 @@ def busca(request):
         pks_filmes = {f.pk for f in filmes}
         pks_series = {s.pk for s in series}
 
-        for r in busca_externa.buscar_filmes_series("movie", termo, idioma=idioma_tmdb)[:LIMITE_IMPORTACAO_AUTOMATICA]:
+        # As 3 buscas externas (filmes, séries, livros) são chamadas de rede
+        # separadas — rodar uma de cada vez faz a busca demorar a SOMA das
+        # três. Rodando em paralelo, a busca demora só o tempo da mais lenta
+        # das três (até 3x mais rápido na prática).
+        with ThreadPoolExecutor(max_workers=3) as executor:
+            futuro_filmes = executor.submit(
+                busca_externa.buscar_filmes_series, "movie", termo, idioma=idioma_tmdb
+            )
+            futuro_series = executor.submit(
+                busca_externa.buscar_filmes_series, "tv", termo, idioma=idioma_tmdb
+            )
+            futuro_livros = executor.submit(busca_externa.buscar_livros, termo)
+            resultados_filmes_api = futuro_filmes.result()
+            resultados_series_api = futuro_series.result()
+            resultados_livros_api = futuro_livros.result()
+
+        for r in resultados_filmes_api[:LIMITE_IMPORTACAO_AUTOMATICA]:
             if r["titulo"].lower() not in titulos_filmes:
                 novo = _criar_filme_rapido(r)
                 if novo and novo.pk not in pks_filmes:
@@ -531,7 +573,7 @@ def busca(request):
                     titulos_filmes.add(novo.titulo.lower())
                     pks_filmes.add(novo.pk)
 
-        for r in busca_externa.buscar_filmes_series("tv", termo, idioma=idioma_tmdb)[:LIMITE_IMPORTACAO_AUTOMATICA]:
+        for r in resultados_series_api[:LIMITE_IMPORTACAO_AUTOMATICA]:
             if r["titulo"].lower() not in titulos_series:
                 novo = _criar_serie_rapida(r)
                 if novo and novo.pk not in pks_series:
@@ -539,7 +581,7 @@ def busca(request):
                     titulos_series.add(novo.titulo.lower())
                     pks_series.add(novo.pk)
 
-        for r in busca_externa.buscar_livros(termo)[:LIMITE_IMPORTACAO_AUTOMATICA]:
+        for r in resultados_livros_api[:LIMITE_IMPORTACAO_AUTOMATICA]:
             if r["titulo"].lower() not in titulos_livros:
                 novo = _criar_livro_rapido(r)
                 if novo:
