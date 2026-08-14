@@ -1,10 +1,13 @@
 import logging
+import threading
+from collections import Counter
 
 from django.contrib import messages
 from django.contrib.admin.views.decorators import staff_member_required
 from django.contrib.auth import login
 from django.contrib.auth.decorators import login_required
 from django.contrib.contenttypes.models import ContentType
+from django.db import connections
 from django.db.models import Avg, Count, Q
 from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
@@ -12,7 +15,7 @@ from django.views.decorators.http import require_POST
 
 from . import busca_externa
 from .forms import AvaliacaoForm, RegistroForm
-from .i18n import IDIOMAS
+from .i18n import IDIOMA_PADRAO, IDIOMAS
 from .models import Avaliacao, Filme, Genero, Livro, Pessoa, Serie
 
 logger = logging.getLogger(__name__)
@@ -63,6 +66,35 @@ def lista(request, tipo):
     return render(request, "catalog/lista.html", contexto)
 
 
+def _idioma_atual(request):
+    codigo = request.session.get("idioma", IDIOMA_PADRAO)
+    return codigo if codigo in IDIOMAS else IDIOMA_PADRAO
+
+
+def _idioma_tmdb_atual(request):
+    return IDIOMAS[_idioma_atual(request)]["tmdb"]
+
+
+def _completar_em_segundo_plano(pk, model, tipo, idioma_tmdb):
+    """Roda `_garantir_dados_completos` numa thread separada, SEM travar a
+    resposta da página. Antes disso rodava direto dentro da view: se a API
+    externa demorasse (ou estivesse fora do ar), a pessoa ficava esperando a
+    página carregar. Agora a página aparece na hora com o que já temos, e
+    elenco/notas completam sozinhos por trás — na próxima vez que a pessoa
+    (ou outra) abrir a mesma página, já vem tudo pronto."""
+    try:
+        item = model.objects.get(pk=pk)
+        _garantir_dados_completos(item, tipo, idioma_tmdb)
+    except model.DoesNotExist:
+        pass
+    except Exception:
+        logger.exception("Falha ao completar dados em segundo plano (%s #%s)", tipo, pk)
+    finally:
+        # Essa thread abre sua própria conexão com o banco; sem fechar aqui,
+        # ela ficaria pendurada depois que a thread termina.
+        connections.close_all()
+
+
 def detalhe(request, tipo, pk):
     info = TIPOS.get(tipo)
     if info is None:
@@ -70,10 +102,14 @@ def detalhe(request, tipo, pk):
     item = get_object_or_404(info["model"], pk=pk)
 
     # Se ainda não temos os dados completos desse título (elenco, sinopse
-    # maior...), busca agora — só na primeira visita à página; depois fica
-    # salvo e as próximas pessoas que abrirem já veem tudo na hora.
+    # maior...), busca em segundo plano — a página não espera isso terminar.
+    # Só na primeira visita; depois fica salvo e todo mundo já vê completo.
     if not item.dados_completos:
-        _garantir_dados_completos(item, tipo)
+        threading.Thread(
+            target=_completar_em_segundo_plano,
+            args=(item.pk, info["model"], tipo, _idioma_tmdb_atual(request)),
+            daemon=True,
+        ).start()
 
     minha_avaliacao = None
     if request.user.is_authenticated:
@@ -149,28 +185,29 @@ def _importar_elenco(obj, lista_elenco):
     obj.elenco.set([p for p in pessoas if p])
 
 
-def _garantir_dados_completos(item, tipo):
+def _garantir_dados_completos(item, tipo, idioma_tmdb=None):
     """Completa elenco, sinopse maior etc. de um título que ainda não tem
     `dados_completos=True`. Só roda de fato na primeira visita à página —
     depois disso fica salvo no banco e as próximas visitas nem chamam essa
     função (veja a checagem em `detalhe()`). Qualquer erro aqui é só
     registrado no log: a página continua funcionando com os dados que já
     tinha, e tenta completar de novo na próxima visita."""
+    idioma_tmdb = idioma_tmdb or busca_externa.IDIOMA_TMDB_PADRAO
     try:
         if tipo == "filme":
-            _completar_filme(item)
+            _completar_filme(item, idioma_tmdb)
         elif tipo == "serie":
-            _completar_serie(item)
+            _completar_serie(item, idioma_tmdb)
         elif tipo == "livro":
             _completar_livro(item)
     except Exception:
         logger.exception("Falha ao completar dados de %s #%s", tipo, item.pk)
 
 
-def _completar_filme(item):
+def _completar_filme(item, idioma_tmdb):
     tmdb_id = item.id_externo
     if not tmdb_id:
-        encontrados = busca_externa.buscar_filmes_series("movie", item.titulo)
+        encontrados = busca_externa.buscar_filmes_series("movie", item.titulo, idioma=idioma_tmdb)
         correspondente = next(
             (r for r in encontrados if r["titulo"].lower() == item.titulo.lower()), None
         )
@@ -185,7 +222,7 @@ def _completar_filme(item):
         item.save(update_fields=["dados_completos"])
         return
 
-    info = busca_externa.detalhes_filme(tmdb_id)
+    info = busca_externa.detalhes_filme(tmdb_id, idioma=idioma_tmdb)
     if not info:
         return  # falha temporária (rede/API fora do ar) — tenta de novo na próxima visita
 
@@ -210,10 +247,10 @@ def _completar_filme(item):
         _importar_generos(item, generos)
 
 
-def _completar_serie(item):
+def _completar_serie(item, idioma_tmdb):
     tmdb_id = item.id_externo
     if not tmdb_id:
-        encontrados = busca_externa.buscar_filmes_series("tv", item.titulo)
+        encontrados = busca_externa.buscar_filmes_series("tv", item.titulo, idioma=idioma_tmdb)
         correspondente = next(
             (r for r in encontrados if r["titulo"].lower() == item.titulo.lower()), None
         )
@@ -226,7 +263,7 @@ def _completar_serie(item):
         item.save(update_fields=["dados_completos"])
         return
 
-    info = busca_externa.detalhes_serie(tmdb_id)
+    info = busca_externa.detalhes_serie(tmdb_id, idioma=idioma_tmdb)
     if not info:
         return
 
@@ -292,16 +329,27 @@ def _criar_filme_rapido(resultado_busca):
     """Cria o Filme só com os dados que já vieram na busca (sem chamada
     extra à API) — usado na busca pública, pra ficar rápida. Diretor e
     elenco ficam pra depois: a própria página de detalhe completa isso
-    sozinha na primeira vez que alguém abrir (veja _garantir_dados_completos)."""
+    sozinha na primeira vez que alguém abrir (veja _garantir_dados_completos).
+
+    Antes de criar, confere pelo id_externo (id do TMDB) se esse filme já
+    está no catálogo — importante porque, com o site em vários idiomas,
+    a mesma busca pode trazer o título "traduzido" (ex: "The Matrix" em vez
+    de "Matrix"), e sem essa checagem cada idioma criaria uma cópia
+    duplicada do mesmo filme."""
     titulo = (resultado_busca.get("titulo") or "").strip()
     ano = resultado_busca.get("ano")
+    id_externo = str(resultado_busca.get("id", ""))
     if not titulo or not ano:
         return None
+    if id_externo:
+        existente = Filme.objects.filter(id_externo=id_externo).first()
+        if existente:
+            return existente
     dados = {
         "ano_lancamento": int(ano),
         "sinopse": resultado_busca.get("sinopse", ""),
         "poster_url": resultado_busca.get("poster_url", ""),
-        "id_externo": str(resultado_busca.get("id", "")),
+        "id_externo": id_externo,
     }
     obj, _ = Filme.objects.get_or_create(titulo=titulo, defaults=dados)
     _importar_generos(obj, resultado_busca.get("generos", []))
@@ -311,13 +359,18 @@ def _criar_filme_rapido(resultado_busca):
 def _criar_serie_rapida(resultado_busca):
     titulo = (resultado_busca.get("titulo") or "").strip()
     ano = resultado_busca.get("ano")
+    id_externo = str(resultado_busca.get("id", ""))
     if not titulo or not ano:
         return None
+    if id_externo:
+        existente = Serie.objects.filter(id_externo=id_externo).first()
+        if existente:
+            return existente
     dados = {
         "ano_lancamento": int(ano),
         "sinopse": resultado_busca.get("sinopse", ""),
         "poster_url": resultado_busca.get("poster_url", ""),
-        "id_externo": str(resultado_busca.get("id", "")),
+        "id_externo": id_externo,
     }
     obj, _ = Serie.objects.get_or_create(titulo=titulo, defaults=dados)
     _importar_generos(obj, resultado_busca.get("generos", []))
@@ -348,12 +401,16 @@ def _criar_livro_rapido(resultado_busca):
     return obj
 
 
-def _criar_filme_do_tmdb(tmdb_id):
+def _criar_filme_do_tmdb(tmdb_id, idioma_tmdb=None):
     """Busca os detalhes completos do filme no TMDB (inclusive elenco) e
     salva no catálogo já com dados_completos=True — quem importar manualmente
     pela tela de staff não precisa esperar a primeira visita completar nada.
     Devolve o objeto Filme criado (ou já existente), ou None se falhar."""
-    info = busca_externa.detalhes_filme(tmdb_id)
+    idioma_tmdb = idioma_tmdb or busca_externa.IDIOMA_TMDB_PADRAO
+    existente = Filme.objects.filter(id_externo=str(tmdb_id)).first()
+    if existente:
+        return existente
+    info = busca_externa.detalhes_filme(tmdb_id, idioma=idioma_tmdb)
     if not info or not info.get("titulo") or not info.get("ano_lancamento"):
         return None
     generos = info.pop("generos", [])
@@ -369,8 +426,12 @@ def _criar_filme_do_tmdb(tmdb_id):
     return obj
 
 
-def _criar_serie_do_tmdb(tmdb_id):
-    info = busca_externa.detalhes_serie(tmdb_id)
+def _criar_serie_do_tmdb(tmdb_id, idioma_tmdb=None):
+    idioma_tmdb = idioma_tmdb or busca_externa.IDIOMA_TMDB_PADRAO
+    existente = Serie.objects.filter(id_externo=str(tmdb_id)).first()
+    if existente:
+        return existente
+    info = busca_externa.detalhes_serie(tmdb_id, idioma=idioma_tmdb)
     if not info or not info.get("titulo") or not info.get("ano_lancamento"):
         return None
     generos = info.pop("generos", [])
@@ -423,6 +484,7 @@ def busca(request):
     """
     termo = request.GET.get("q", "").strip()
     resultados = {"filmes": [], "series": [], "livros": []}
+    idioma_tmdb = _idioma_tmdb_atual(request)
 
     if termo:
         filmes = list(Filme.objects.filter(titulo__icontains=termo))
@@ -432,20 +494,24 @@ def busca(request):
         titulos_filmes = {f.titulo.lower() for f in filmes}
         titulos_series = {s.titulo.lower() for s in series}
         titulos_livros = {l.titulo.lower() for l in livros}
+        pks_filmes = {f.pk for f in filmes}
+        pks_series = {s.pk for s in series}
 
-        for r in busca_externa.buscar_filmes_series("movie", termo)[:LIMITE_IMPORTACAO_AUTOMATICA]:
+        for r in busca_externa.buscar_filmes_series("movie", termo, idioma=idioma_tmdb)[:LIMITE_IMPORTACAO_AUTOMATICA]:
             if r["titulo"].lower() not in titulos_filmes:
                 novo = _criar_filme_rapido(r)
-                if novo:
+                if novo and novo.pk not in pks_filmes:
                     filmes.append(novo)
                     titulos_filmes.add(novo.titulo.lower())
+                    pks_filmes.add(novo.pk)
 
-        for r in busca_externa.buscar_filmes_series("tv", termo)[:LIMITE_IMPORTACAO_AUTOMATICA]:
+        for r in busca_externa.buscar_filmes_series("tv", termo, idioma=idioma_tmdb)[:LIMITE_IMPORTACAO_AUTOMATICA]:
             if r["titulo"].lower() not in titulos_series:
                 novo = _criar_serie_rapida(r)
-                if novo:
+                if novo and novo.pk not in pks_series:
                     series.append(novo)
                     titulos_series.add(novo.titulo.lower())
+                    pks_series.add(novo.pk)
 
         for r in busca_externa.buscar_livros(termo)[:LIMITE_IMPORTACAO_AUTOMATICA]:
             if r["titulo"].lower() not in titulos_livros:
@@ -466,13 +532,14 @@ def importar_buscar(request):
     controle. Só a equipe (staff) acessa."""
     tipo = request.GET.get("tipo", "filme")
     query = request.GET.get("q", "").strip()
+    idioma_tmdb = _idioma_tmdb_atual(request)
 
     resultados = []
     if query:
         if tipo == "filme":
-            resultados = busca_externa.buscar_filmes_series("movie", query)
+            resultados = busca_externa.buscar_filmes_series("movie", query, idioma=idioma_tmdb)
         elif tipo == "serie":
-            resultados = busca_externa.buscar_filmes_series("tv", query)
+            resultados = busca_externa.buscar_filmes_series("tv", query, idioma=idioma_tmdb)
         elif tipo == "livro":
             resultados = busca_externa.buscar_livros(query)
 
@@ -488,7 +555,7 @@ def importar_buscar(request):
 @staff_member_required
 @require_POST
 def importar_adicionar_filme(request, tmdb_id):
-    obj = _criar_filme_do_tmdb(tmdb_id)
+    obj = _criar_filme_do_tmdb(tmdb_id, idioma_tmdb=_idioma_tmdb_atual(request))
     if not obj:
         messages.error(
             request,
@@ -502,7 +569,7 @@ def importar_adicionar_filme(request, tmdb_id):
 @staff_member_required
 @require_POST
 def importar_adicionar_serie(request, tmdb_id):
-    obj = _criar_serie_do_tmdb(tmdb_id)
+    obj = _criar_serie_do_tmdb(tmdb_id, idioma_tmdb=_idioma_tmdb_atual(request))
     if not obj:
         messages.error(
             request,
@@ -554,26 +621,72 @@ def registrar(request):
 
 @login_required
 def perfil(request):
-    """Página do próprio usuário: as avaliações dela, separadas em abas por
-    categoria (filmes / séries / livros), mais recentes primeiro."""
-    avaliacoes_do_usuario = Avaliacao.objects.filter(usuario=request.user).order_by("-criado_em")
+    """Página do próprio usuário: estatísticas de destaque + as avaliações
+    dela, separadas em abas por categoria (filmes / séries / livros), mais
+    recentes primeiro. Cada avaliação pode ser editada ou apagada direto
+    aqui, sem precisar ir até a página do título."""
+    avaliacoes_do_usuario = list(
+        Avaliacao.objects.filter(usuario=request.user)
+        .select_related("content_type")
+        .order_by("-criado_em")
+    )
     tipos_por_content_type = {
         ContentType.objects.get_for_model(Filme).id: "filme",
         ContentType.objects.get_for_model(Serie).id: "serie",
         ContentType.objects.get_for_model(Livro).id: "livro",
     }
     avaliacoes_por_tipo = {"filme": [], "serie": [], "livro": []}
+    contagem_generos = Counter()
     for avaliacao in avaliacoes_do_usuario:
         tipo_desse_item = tipos_por_content_type.get(avaliacao.content_type_id)
-        if tipo_desse_item:
-            avaliacoes_por_tipo[tipo_desse_item].append(avaliacao)
+        if not tipo_desse_item:
+            continue
+        # Guarda o tipo no próprio objeto (não vai pro banco, só facilita o
+        # template) — assim cada linha da lista já sabe montar sua própria
+        # URL de detalhe/edição sem repetir lógica por aba.
+        avaliacao.tipo = tipo_desse_item
+        avaliacoes_por_tipo[tipo_desse_item].append(avaliacao)
+
+        titulo_avaliado = avaliacao.titulo_avaliado
+        if titulo_avaliado:
+            for genero in titulo_avaliado.generos.all():
+                contagem_generos[genero.nome] += 1
+
+    total_avaliacoes = len(avaliacoes_do_usuario)
+    nota_media_dada = (
+        round(sum(a.nota for a in avaliacoes_do_usuario) / total_avaliacoes, 1)
+        if total_avaliacoes
+        else None
+    )
+    genero_favorito = contagem_generos.most_common(1)[0][0] if contagem_generos else None
+    favorito = (
+        max(avaliacoes_do_usuario, key=lambda a: (a.nota, a.criado_em))
+        if avaliacoes_do_usuario
+        else None
+    )
 
     contexto = {
         "avaliacoes_filmes": avaliacoes_por_tipo["filme"],
         "avaliacoes_series": avaliacoes_por_tipo["serie"],
         "avaliacoes_livros": avaliacoes_por_tipo["livro"],
+        "total_avaliacoes": total_avaliacoes,
+        "nota_media_dada": nota_media_dada,
+        "genero_favorito": genero_favorito,
+        "favorito": favorito,
     }
     return render(request, "catalog/perfil.html", contexto)
+
+
+@login_required
+@require_POST
+def excluir_avaliacao(request, avaliacao_id):
+    """Apaga uma avaliação — só o próprio autor pode apagar a dele (o
+    get_object_or_404 com usuario=request.user garante isso: se o ID for de
+    outra pessoa, dá 404 em vez de deixar apagar)."""
+    avaliacao = get_object_or_404(Avaliacao, pk=avaliacao_id, usuario=request.user)
+    avaliacao.delete()
+    messages.success(request, "Avaliação removida.")
+    return redirect("perfil")
 
 
 def mudar_idioma(request, codigo):

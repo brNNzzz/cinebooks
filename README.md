@@ -119,15 +119,23 @@ do título (não em todo mundo de uma vez, pra não deixar o site lento) e depoi
 salvas. Sem a `OMDB_API_KEY` configurada, o site simplesmente não mostra essas notas —
 nada quebra, e as avaliações da comunidade do CineBooks continuam funcionando normal.
 
-## Perfil de usuário (avaliações por categoria)
+## Perfil de usuário
 
-Todo usuário logado tem uma página `/perfil/` (link "Olá, fulano" no menu) com "Minhas
-avaliações", separadas em três abas — Filmes / Séries / Livros — mostrando só o que
-aquele usuário avaliou em cada categoria, das mais recentes pras mais antigas.
+Todo usuário logado tem uma página `/perfil/` (link com o nome dele no menu) com:
 
-(Foto de perfil ficou de fora por enquanto — pode ser adicionada depois; ela exigiria
-upload de arquivo, que no plano grátis do Render some a cada deploy sem um serviço de
-armazenamento externo configurado junto.)
+- **Avatar automático**: um círculo colorido com as iniciais do nome de usuário
+  (tipo Gmail/Slack) — sem precisar de upload de foto.
+- **Estatísticas de destaque**: quantas avaliações a pessoa já fez, a nota média que
+  ela costuma dar, o gênero que ela mais avalia e o título que ela deu a nota mais
+  alta.
+- **Minhas avaliações**, em três abas — Filmes / Séries / Livros — das mais recentes
+  pras mais antigas. Cada avaliação pode ser **editada** (um formulário abre embaixo
+  da própria avaliação, sem sair da página) ou **excluída** direto ali, sem precisar
+  ir até a página do título.
+
+(Foto de perfil de verdade — upload de arquivo — ficou de fora por enquanto: no plano
+grátis do Render, uploads somem a cada deploy sem um serviço de armazenamento externo
+configurado junto. O avatar de iniciais resolve isso sem depender de nada externo.)
 
 ## Idiomas (seletor de bandeiras)
 
@@ -137,12 +145,14 @@ Francês, Árabe, Bengali, Russo, Urdu e Indonésio (as línguas mais faladas do
 além do português). Árabe e urdu também trocam a direção do texto pra
 direita-para-esquerda automaticamente.
 
-A troca cobre os textos fixos da interface: menu, botões, rótulos de página, mensagens
-de "sem avaliações" etc. O conteúdo que vem das APIs externas (sinopse, nome dos
-filmes/séries/livros buscados no TMDB/Open Library) continua em português, porque é
-esse o idioma que essas APIs devolvem pra nós — traduzir esse conteúdo automaticamente
-ficaria fora do escopo deste projeto, mas é uma melhoria possível de citar se o
-professor perguntar "o que mais dava pra fazer".
+A troca cobre os textos fixos da interface (menu, botões, rótulos, mensagens) **e**
+título/sinopse/gêneros de filmes e séries **novos** — ou seja: quando alguém busca um
+filme/série que ainda não está no catálogo, a busca já pede os dados pro TMDB no
+idioma selecionado (veja o parâmetro `idioma` em `catalog/busca_externa.py`), então
+esse título novo já entra traduzido. Livros (Open Library não tem esse recurso) e
+títulos que já estavam no catálogo antes continuam no idioma em que foram cadastrados
+originalmente — re-traduzir tudo a cada visita deixaria o site lento, e é por isso
+que a tradução automática de conteúdo já existente ficou fora do escopo.
 
 Tecnicamente, não usamos o sistema de tradução "de fábrica" do Django (que depende de
 um programa externo, o `gettext`, pra compilar os arquivos de tradução) — em vez
@@ -150,6 +160,20 @@ disso, as traduções ficam num dicionário Python simples
 (`catalog/i18n.py`), e uma tag de template própria (`{% t "chave" %}`) busca o texto
 certo de acordo com o idioma escolhido (guardado na sessão da pessoa). Isso evita
 depender de instalar ferramentas extras no computador de quem for rodar o projeto.
+
+## Desempenho: por que a primeira visita a um título é rápida mesmo sem elenco pronto
+
+Quando alguém abre a página de um filme/série pela primeira vez (e ainda faltam
+elenco/notas completas), o site busca esses dados **em segundo plano** — a página
+aparece na hora com o que já tem, sem esperar a API externa responder. Elenco e notas
+completam sozinhos alguns segundos depois; quem atualizar a página (ou a próxima
+pessoa que visitar) já vê tudo pronto. Antes, essa busca acontecia *antes* de mostrar
+a página, o que podia deixar a navegação visivelmente lenta se a API demorasse.
+
+Vale lembrar também que o plano grátis do Render "dorme" o site depois de uns 15
+minutos sem visitas, e o primeiro acesso depois disso pode demorar de 30 a 60
+segundos pra "acordar" — isso é uma limitação do plano grátis, não um bug do código,
+e afeta qualquer pessoa (não é uma coisa de computador vs. celular).
 
 ## Estrutura do projeto
 
@@ -206,11 +230,17 @@ dos três. Isso evita duplicação de código nas views e no template.
   ficam salvos no banco e aparecem na hora pra todo mundo. Isso é controlado pelo campo
   `dados_completos` do título (ver `catalog/models.py` e a função
   `_garantir_dados_completos` em `catalog/views.py`).
-- **Perfil de usuário** (`/perfil/`): avaliações da própria pessoa, separadas em abas
-  por categoria (Filmes / Séries / Livros).
+- **Perfil de usuário** (`/perfil/`): avatar com iniciais, estatísticas (total de
+  avaliações, nota média dada, gênero e título favoritos) e as avaliações da própria
+  pessoa, separadas em abas por categoria (Filmes / Séries / Livros) — cada uma pode
+  ser editada ou excluída direto ali.
 - **Seletor de idioma** (bandeira no menu): troca a interface entre 11 idiomas —
   Português, Inglês, Mandarim, Hindi, Espanhol, Francês, Árabe, Bengali, Russo, Urdu e
-  Indonésio.
+  Indonésio. Buscas de filmes/séries novos já trazem os dados traduzidos direto do
+  TMDB.
+- **Busca/detalhe em segundo plano**: dados extras (elenco, notas de crítica/público)
+  de um título recém-cadastrado são completados em segundo plano, sem travar a
+  navegação de quem está vendo a página.
 
 ## Possíveis melhorias (caso o professor pergunte "o que mais dava pra fazer")
 

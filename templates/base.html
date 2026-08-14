@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 {% load static %}
 {% load i18n_custom %}
+{% load perfil_extras %}
 <html lang="{{ IDIOMA_ATUAL }}" dir="{{ IDIOMA_INFO.direcao }}">
 <head>
     <meta charset="UTF-8">
@@ -43,7 +44,13 @@
                     </li>
                     {% if user.is_authenticated %}
                         <li class="nav-item">
-                            <a class="nav-link" href="{% url 'perfil' %}">{% t "nav_ola" %} {{ user.username }}</a>
+                            <a class="nav-link d-flex align-items-center gap-2" href="{% url 'perfil' %}">
+                                <span class="rounded-circle d-inline-flex align-items-center justify-content-center text-white fw-bold"
+                                      style="width:24px;height:24px;font-size:0.65rem;background-color:{{ user.username|cor_avatar }};">
+                                    {{ user.username|iniciais }}
+                                </span>
+                                {{ user.username }}
+                            </a>
                         </li>
                         {% if user.is_staff %}
                         <li class="nav-item"><a class="nav-link" href="{% url 'importar_buscar' %}">{% t "nav_adicionar_titulo" %}</a></li>

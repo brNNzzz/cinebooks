@@ -1,0 +1,43 @@
+{% load i18n_custom %}
+<div class="border-bottom py-2">
+    <div class="d-flex justify-content-between align-items-start">
+        <div>
+            <a href="{% url 'detalhe' avaliacao.tipo avaliacao.object_id %}" class="fw-semibold text-decoration-none">
+                {{ avaliacao.titulo_avaliado.titulo }}
+            </a>
+            <span class="badge bg-warning text-dark ms-2">⭐ {{ avaliacao.nota }}</span>
+            {% if avaliacao.comentario %}<p class="mb-0 text-muted small mt-1">{{ avaliacao.comentario }}</p>{% endif %}
+        </div>
+        <div class="text-end">
+            <div class="text-muted small mb-1">{{ avaliacao.criado_em|date:"d/m/Y" }}</div>
+            <button class="btn btn-sm btn-outline-secondary py-0 px-2" type="button"
+                    data-bs-toggle="collapse" data-bs-target="#editar-avaliacao-{{ avaliacao.pk }}">
+                {% t "perfil_editar" %}
+            </button>
+            <form action="{% url 'excluir_avaliacao' avaliacao.pk %}" method="post" class="d-inline"
+                  onsubmit="return confirm('{% t "perfil_confirmar_exclusao" %}');">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-sm btn-outline-danger py-0 px-2">{% t "perfil_excluir" %}</button>
+            </form>
+        </div>
+    </div>
+
+    <div class="collapse mt-2" id="editar-avaliacao-{{ avaliacao.pk }}">
+        <form method="post" action="{% url 'avaliar' avaliacao.tipo avaliacao.object_id %}" class="row g-2 align-items-start">
+            {% csrf_token %}
+            <div class="col-sm-3">
+                <select name="nota" class="form-select form-select-sm">
+                    {% for n in "12345" %}
+                        <option value="{{ n }}" {% if avaliacao.nota|stringformat:"s" == n %}selected{% endif %}>{{ n }} ⭐</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-sm-7">
+                <textarea name="comentario" class="form-control form-control-sm" rows="2">{{ avaliacao.comentario }}</textarea>
+            </div>
+            <div class="col-sm-2">
+                <button type="submit" class="btn btn-sm btn-primary w-100">{% t "detalhe_salvar" %}</button>
+            </div>
+        </form>
+    </div>
+</div>

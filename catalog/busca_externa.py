@@ -21,10 +21,12 @@ TMDB_BASE_URL = "https://api.themoviedb.org/3"
 TMDB_IMAGE_BASE_URL = "https://image.tmdb.org/t/p/w500"
 OMDB_BASE_URL = "https://www.omdbapi.com/"
 TIMEOUT_SEGUNDOS = 6
+IDIOMA_TMDB_PADRAO = "pt-BR"
 
-# Lista oficial de gêneros do TMDB (fixa, praticamente nunca muda) — usamos
-# esse mapa pronto pra não precisar de uma chamada extra à API só pra
-# descobrir o nome de cada gênero.
+# Lista oficial de gêneros do TMDB em português (fixa, praticamente nunca
+# muda) — usada como padrão/reserva, pra não precisar de uma chamada extra à
+# API só pra descobrir o nome de cada gênero quando o idioma pedido é o
+# português. Para os outros idiomas, ver _mapa_generos() logo abaixo.
 GENEROS_FILME_TMDB = {
     28: "Ação", 12: "Aventura", 16: "Animação", 35: "Comédia", 80: "Crime",
     99: "Documentário", 18: "Drama", 10751: "Família", 14: "Fantasia",
@@ -39,14 +41,20 @@ GENEROS_SERIE_TMDB = {
     10766: "Novela", 10767: "Talk Show", 10768: "Guerra e Política", 37: "Faroeste",
 }
 
+# Cache em memória dos nomes de gênero por idioma, pra não ter que buscar de
+# novo a cada busca (a lista de gêneros do TMDB praticamente nunca muda).
+# Reseta quando o processo do site reinicia — sem problema, é só um pedido a
+# mais nesse caso.
+_CACHE_GENEROS = {}
+
 
 def tmdb_configurado():
     return bool(getattr(settings, "TMDB_API_KEY", ""))
 
 
-def _tmdb_get(caminho, parametros_extra=None):
+def _tmdb_get(caminho, parametros_extra=None, idioma=IDIOMA_TMDB_PADRAO):
     chave = getattr(settings, "TMDB_API_KEY", "")
-    parametros = {"language": "pt-BR"}
+    parametros = {"language": idioma or IDIOMA_TMDB_PADRAO}
     cabecalhos = {}
     if chave.startswith("eyJ"):  # token v4 (JWT)
         cabecalhos["Authorization"] = f"Bearer {chave}"
@@ -62,16 +70,41 @@ def _tmdb_get(caminho, parametros_extra=None):
     return resposta.json()
 
 
-def buscar_filmes_series(tipo_tmdb, query):
+def _mapa_generos(tipo_tmdb, idioma):
+    """Nome de cada gênero (id -> nome) no idioma pedido. Em português, usa
+    o mapa fixo (sem gastar chamada de API). Nos outros idiomas, busca uma
+    vez no TMDB e guarda em cache pro resto da vida do processo."""
+    mapa_padrao = GENEROS_FILME_TMDB if tipo_tmdb == "movie" else GENEROS_SERIE_TMDB
+    if not idioma or idioma == IDIOMA_TMDB_PADRAO:
+        return mapa_padrao
+
+    chave_cache = (tipo_tmdb, idioma)
+    if chave_cache in _CACHE_GENEROS:
+        return _CACHE_GENEROS[chave_cache]
+
+    try:
+        dados = _tmdb_get(f"/genre/{tipo_tmdb}/list", idioma=idioma)
+        mapa = {g["id"]: g["name"] for g in dados.get("genres") or []}
+        if mapa:
+            _CACHE_GENEROS[chave_cache] = mapa
+            return mapa
+    except (requests.RequestException, ValueError, KeyError) as erro:
+        logger.warning("Falha ao buscar gêneros (%s/%s) no TMDB: %s", tipo_tmdb, idioma, erro)
+    return mapa_padrao
+
+
+def buscar_filmes_series(tipo_tmdb, query, idioma=IDIOMA_TMDB_PADRAO):
     """tipo_tmdb é 'movie' ou 'tv'. Devolve uma lista resumida de resultados —
     já com tudo que dá pra cadastrar um item completo, numa ÚNICA chamada à
     API (sem precisar buscar detalhes um por um depois, o que deixaria a
-    busca lenta)."""
+    busca lenta). O parâmetro `idioma` (ex: "en-US") faz o TMDB devolver
+    título/sinopse já traduzidos — usado pra que buscas de títulos NOVOS
+    apareçam no idioma que a pessoa escolheu no site."""
     if not tmdb_configurado() or not query:
         return []
-    mapa_generos = GENEROS_FILME_TMDB if tipo_tmdb == "movie" else GENEROS_SERIE_TMDB
+    mapa_generos = _mapa_generos(tipo_tmdb, idioma)
     try:
-        dados = _tmdb_get(f"/search/{tipo_tmdb}", {"query": query})
+        dados = _tmdb_get(f"/search/{tipo_tmdb}", {"query": query}, idioma=idioma)
         resultados = []
         for item in (dados.get("results") or [])[:10]:
             titulo = item.get("title") or item.get("name") or ""
@@ -112,11 +145,11 @@ def _extrair_elenco(dados):
     return [p for p in pessoas if p["nome"]]
 
 
-def detalhes_filme(tmdb_id):
+def detalhes_filme(tmdb_id, idioma=IDIOMA_TMDB_PADRAO):
     """Devolve um dict com os dados completos do filme (inclusive elenco),
     ou None se a busca falhar."""
     try:
-        dados = _tmdb_get(f"/movie/{tmdb_id}", {"append_to_response": "credits"})
+        dados = _tmdb_get(f"/movie/{tmdb_id}", {"append_to_response": "credits"}, idioma=idioma)
     except (requests.RequestException, ValueError) as erro:
         logger.warning("Falha ao buscar detalhes do filme %r no TMDB: %s", tmdb_id, erro)
         return None
@@ -140,11 +173,11 @@ def detalhes_filme(tmdb_id):
     }
 
 
-def detalhes_serie(tmdb_id):
+def detalhes_serie(tmdb_id, idioma=IDIOMA_TMDB_PADRAO):
     """Devolve um dict com os dados completos da série (inclusive elenco),
     ou None se a busca falhar."""
     try:
-        dados = _tmdb_get(f"/tv/{tmdb_id}", {"append_to_response": "credits"})
+        dados = _tmdb_get(f"/tv/{tmdb_id}", {"append_to_response": "credits"}, idioma=idioma)
     except (requests.RequestException, ValueError) as erro:
         logger.warning("Falha ao buscar detalhes da série %r no TMDB: %s", tmdb_id, erro)
         return None
