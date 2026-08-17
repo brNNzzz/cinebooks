@@ -125,7 +125,7 @@ _COMPLETANDO_AGORA = set()
 _COMPLETANDO_AGORA_LOCK = threading.Lock()
 
 
-def _completar_em_segundo_plano(pk, model, tipo, idioma_tmdb):
+def _completar_em_segundo_plano(pk, model, tipo):
     """Roda `_garantir_dados_completos` numa thread separada, SEM travar a
     resposta da página. Antes disso rodava direto dentro da view: se a API
     externa demorasse (ou estivesse fora do ar), a pessoa ficava esperando a
@@ -139,7 +139,7 @@ def _completar_em_segundo_plano(pk, model, tipo, idioma_tmdb):
         _COMPLETANDO_AGORA.add(chave)
     try:
         item = model.objects.get(pk=pk)
-        _garantir_dados_completos(item, tipo, idioma_tmdb)
+        _garantir_dados_completos(item, tipo)
     except model.DoesNotExist:
         pass
     except Exception:
@@ -164,7 +164,7 @@ def detalhe(request, tipo, pk):
     if not item.dados_completos:
         threading.Thread(
             target=_completar_em_segundo_plano,
-            args=(item.pk, info["model"], tipo, _idioma_tmdb_atual(request)),
+            args=(item.pk, info["model"], tipo),
             daemon=True,
         ).start()
 
@@ -174,7 +174,7 @@ def detalhe(request, tipo, pk):
     # aparece na primeira visita em vez de só depois que o resto terminar de
     # completar em segundo plano.
     if tipo in ("filme", "serie") and not item.notas_omdb_verificadas:
-        _garantir_notas_omdb(item, tipo=tipo, idioma_tmdb=_idioma_tmdb_atual(request))
+        _garantir_notas_omdb(item, tipo=tipo)
 
     minha_avaliacao = None
     if request.user.is_authenticated:
@@ -250,26 +250,31 @@ def _importar_elenco(obj, lista_elenco):
     obj.elenco.set([p for p in pessoas if p])
 
 
-def _garantir_dados_completos(item, tipo, idioma_tmdb=None):
+def _garantir_dados_completos(item, tipo):
     """Completa elenco, sinopse maior etc. de um título que ainda não tem
     `dados_completos=True`. Só roda de fato na primeira visita à página —
     depois disso fica salvo no banco e as próximas visitas nem chamam essa
     função (veja a checagem em `detalhe()`). Qualquer erro aqui é só
     registrado no log: a página continua funcionando com os dados que já
-    tinha, e tenta completar de novo na próxima visita."""
-    idioma_tmdb = idioma_tmdb or busca_externa.IDIOMA_TMDB_PADRAO
+    tinha, e tenta completar de novo na próxima visita.
+
+    Sempre busca no MESMO idioma em que o título foi cadastrado
+    (`item.idioma_tmdb_conteudo`), nunca no idioma de quem está navegando
+    agora — senão o título ficava com o nome num idioma e a sinopse
+    completada depois em outro, dependendo de quem foi a primeira pessoa a
+    abrir a página."""
     try:
         if tipo == "filme":
-            _completar_filme(item, idioma_tmdb)
+            _completar_filme(item)
         elif tipo == "serie":
-            _completar_serie(item, idioma_tmdb)
+            _completar_serie(item)
         elif tipo == "livro":
             _completar_livro(item)
     except Exception:
         logger.exception("Falha ao completar dados de %s #%s", tipo, item.pk)
 
 
-def _completar_imdb_id(item, tipo, idioma_tmdb):
+def _completar_imdb_id(item, tipo):
     """Resolve e salva o `imdb_id` de um título que já tem `id_externo`
     (TMDB) mas ainda não tem o `imdb_id` guardado — caso dos títulos
     cadastrados ANTES desse campo existir. Sem isso, esses títulos ficariam
@@ -277,7 +282,7 @@ def _completar_imdb_id(item, tipo, idioma_tmdb):
     vez que o título está traduzido), mesmo já sabendo o ID do TMDB."""
     if not item.id_externo:
         return
-    idioma_tmdb = idioma_tmdb or busca_externa.IDIOMA_TMDB_PADRAO
+    idioma_tmdb = item.idioma_tmdb_conteudo or busca_externa.IDIOMA_TMDB_PADRAO
     try:
         if tipo == "filme":
             info = busca_externa.detalhes_filme(item.id_externo, idioma=idioma_tmdb)
@@ -291,7 +296,7 @@ def _completar_imdb_id(item, tipo, idioma_tmdb):
         item.save(update_fields=["imdb_id"])
 
 
-def _garantir_notas_omdb(item, tipo=None, idioma_tmdb=None):
+def _garantir_notas_omdb(item, tipo=None):
     """Busca as notas de público/crítica/Rotten Tomatoes no OMDb e salva, se
     ainda não tiver. Feito separado do resto do "completar dados" (elenco,
     sinopse) porque é só 1 chamada rápida — dá pra fazer na hora, sem
@@ -312,7 +317,7 @@ def _garantir_notas_omdb(item, tipo=None, idioma_tmdb=None):
     if not busca_externa.omdb_configurado():
         return
     if not item.imdb_id and tipo in ("filme", "serie"):
-        _completar_imdb_id(item, tipo, idioma_tmdb)
+        _completar_imdb_id(item, tipo)
     try:
         notas = busca_externa.buscar_notas_omdb(
             item.titulo, item.ano_lancamento, imdb_id=item.imdb_id
@@ -351,7 +356,8 @@ def _melhor_correspondencia(encontrados, item):
     return (mesmo_ano or encontrados)[0]
 
 
-def _completar_filme(item, idioma_tmdb):
+def _completar_filme(item):
+    idioma_tmdb = item.idioma_tmdb_conteudo or busca_externa.IDIOMA_TMDB_PADRAO
     tmdb_id = item.id_externo
     if not tmdb_id:
         encontrados = busca_externa.buscar_filmes_series("movie", item.titulo, idioma=idioma_tmdb)
@@ -386,14 +392,15 @@ def _completar_filme(item, idioma_tmdb):
     item.dados_completos = True
     item.save()
     if not item.notas_omdb_verificadas:
-        _garantir_notas_omdb(item, tipo="filme", idioma_tmdb=idioma_tmdb)
+        _garantir_notas_omdb(item, tipo="filme")
     if elenco:
         _importar_elenco(item, elenco)
     if generos:
         _importar_generos(item, generos)
 
 
-def _completar_serie(item, idioma_tmdb):
+def _completar_serie(item):
+    idioma_tmdb = item.idioma_tmdb_conteudo or busca_externa.IDIOMA_TMDB_PADRAO
     tmdb_id = item.id_externo
     if not tmdb_id:
         encontrados = busca_externa.buscar_filmes_series("tv", item.titulo, idioma=idioma_tmdb)
@@ -426,7 +433,7 @@ def _completar_serie(item, idioma_tmdb):
     item.dados_completos = True
     item.save()
     if not item.notas_omdb_verificadas:
-        _garantir_notas_omdb(item, tipo="serie", idioma_tmdb=idioma_tmdb)
+        _garantir_notas_omdb(item, tipo="serie")
     if elenco:
         _importar_elenco(item, elenco)
     if generos:
@@ -468,7 +475,7 @@ def _completar_livro(item):
 LIMITE_IMPORTACAO_AUTOMATICA = 10
 
 
-def _criar_filme_rapido(resultado_busca):
+def _criar_filme_rapido(resultado_busca, idioma_tmdb=None):
     """Cria o Filme só com os dados que já vieram na busca (sem chamada
     extra à API) — usado na busca pública, pra ficar rápida. Diretor e
     elenco ficam pra depois: a própria página de detalhe completa isso
@@ -478,7 +485,12 @@ def _criar_filme_rapido(resultado_busca):
     está no catálogo — importante porque, com o site em vários idiomas,
     a mesma busca pode trazer o título "traduzido" (ex: "The Matrix" em vez
     de "Matrix"), e sem essa checagem cada idioma criaria uma cópia
-    duplicada do mesmo filme."""
+    duplicada do mesmo filme.
+
+    Guarda também em que idioma esse filme foi encontrado
+    (`idioma_tmdb_conteudo`) — assim, quando a página completar o resto
+    depois (elenco, sinopse maior), ela busca nesse MESMO idioma, não no
+    idioma de quem estiver navegando naquele momento."""
     titulo = (resultado_busca.get("titulo") or "").strip()
     ano = resultado_busca.get("ano")
     id_externo = str(resultado_busca.get("id", ""))
@@ -493,13 +505,14 @@ def _criar_filme_rapido(resultado_busca):
         "sinopse": resultado_busca.get("sinopse", ""),
         "poster_url": resultado_busca.get("poster_url", ""),
         "id_externo": id_externo,
+        "idioma_tmdb_conteudo": idioma_tmdb or busca_externa.IDIOMA_TMDB_PADRAO,
     }
     obj, _ = Filme.objects.get_or_create(titulo=titulo, defaults=dados)
     _importar_generos(obj, resultado_busca.get("generos", []))
     return obj
 
 
-def _criar_serie_rapida(resultado_busca):
+def _criar_serie_rapida(resultado_busca, idioma_tmdb=None):
     titulo = (resultado_busca.get("titulo") or "").strip()
     ano = resultado_busca.get("ano")
     id_externo = str(resultado_busca.get("id", ""))
@@ -514,6 +527,7 @@ def _criar_serie_rapida(resultado_busca):
         "sinopse": resultado_busca.get("sinopse", ""),
         "poster_url": resultado_busca.get("poster_url", ""),
         "id_externo": id_externo,
+        "idioma_tmdb_conteudo": idioma_tmdb or busca_externa.IDIOMA_TMDB_PADRAO,
     }
     obj, _ = Serie.objects.get_or_create(titulo=titulo, defaults=dados)
     _importar_generos(obj, resultado_busca.get("generos", []))
@@ -558,10 +572,15 @@ def _criar_filme_do_tmdb(tmdb_id, idioma_tmdb=None):
         return None
     generos = info.pop("generos", [])
     elenco = info.pop("elenco", [])
-    notas = busca_externa.buscar_notas_omdb(info["titulo"], info["ano_lancamento"])
+    notas = busca_externa.buscar_notas_omdb(
+        info["titulo"], info["ano_lancamento"], imdb_id=info.get("imdb_id", "")
+    )
     info["nota_publico"] = notas.get("nota_publico")
     info["nota_critica"] = notas.get("nota_critica")
+    info["nota_rotten_tomatoes"] = notas.get("nota_rotten_tomatoes")
+    info["notas_omdb_verificadas"] = True
     info["id_externo"] = str(tmdb_id)
+    info["idioma_tmdb_conteudo"] = idioma_tmdb
     info["dados_completos"] = True
     obj, _ = Filme.objects.get_or_create(titulo=info["titulo"], defaults=info)
     _importar_generos(obj, generos)
@@ -579,10 +598,15 @@ def _criar_serie_do_tmdb(tmdb_id, idioma_tmdb=None):
         return None
     generos = info.pop("generos", [])
     elenco = info.pop("elenco", [])
-    notas = busca_externa.buscar_notas_omdb(info["titulo"], info["ano_lancamento"])
+    notas = busca_externa.buscar_notas_omdb(
+        info["titulo"], info["ano_lancamento"], imdb_id=info.get("imdb_id", "")
+    )
     info["nota_publico"] = notas.get("nota_publico")
     info["nota_critica"] = notas.get("nota_critica")
+    info["nota_rotten_tomatoes"] = notas.get("nota_rotten_tomatoes")
+    info["notas_omdb_verificadas"] = True
     info["id_externo"] = str(tmdb_id)
+    info["idioma_tmdb_conteudo"] = idioma_tmdb
     info["dados_completos"] = True
     obj, _ = Serie.objects.get_or_create(titulo=info["titulo"], defaults=info)
     _importar_generos(obj, generos)
@@ -658,7 +682,7 @@ def busca(request):
 
         for r in resultados_filmes_api[:LIMITE_IMPORTACAO_AUTOMATICA]:
             if r["titulo"].lower() not in titulos_filmes:
-                novo = _criar_filme_rapido(r)
+                novo = _criar_filme_rapido(r, idioma_tmdb=idioma_tmdb)
                 if novo and novo.pk not in pks_filmes:
                     filmes.append(novo)
                     titulos_filmes.add(novo.titulo.lower())
@@ -666,7 +690,7 @@ def busca(request):
 
         for r in resultados_series_api[:LIMITE_IMPORTACAO_AUTOMATICA]:
             if r["titulo"].lower() not in titulos_series:
-                novo = _criar_serie_rapida(r)
+                novo = _criar_serie_rapida(r, idioma_tmdb=idioma_tmdb)
                 if novo and novo.pk not in pks_series:
                     series.append(novo)
                     titulos_series.add(novo.titulo.lower())

@@ -90,6 +90,18 @@ class Titulo(models.Model):
     # está traduzido (ex: "Duna" não bate com "Dune" no OMDb).
     imdb_id = models.CharField("ID no IMDb", max_length=20, blank=True)
 
+    # Em que idioma (código do TMDB, tipo "pt-BR" ou "en-US") esse título
+    # foi cadastrado — ou seja, em que idioma estão o título e a sinopse
+    # hoje. Guardado no momento da criação e usado pra TODAS as buscas de
+    # complemento depois (elenco, sinopse maior, imdb_id...), mesmo que a
+    # pessoa que visitar a página esteja navegando em outro idioma. Sem
+    # isso, um filme cadastrado em português podia acabar com a sinopse
+    # trocada pra inglês só porque alguém navegando em inglês abriu a
+    # página dele — título e sinopse ficavam em idiomas diferentes.
+    idioma_tmdb_conteudo = models.CharField(
+        "idioma do conteúdo cadastrado", max_length=10, blank=True, default="pt-BR"
+    )
+
     # Guarda o ID do título na API externa (TMDB para filme/série, Open
     # Library para livro). Usado depois pra completar os dados (elenco,
     # sinopse maior) sem precisar buscar o título de novo pelo nome.
