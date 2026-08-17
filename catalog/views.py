@@ -132,7 +132,7 @@ def detalhe(request, tipo, pk):
     # OMDb, então dá pra fazer isso sem travar a página, e assim a nota já
     # aparece na primeira visita em vez de só depois que o resto terminar de
     # completar em segundo plano.
-    if tipo in ("filme", "serie") and _sem_notas_omdb(item):
+    if tipo in ("filme", "serie") and not item.notas_omdb_verificadas:
         _garantir_notas_omdb(item, tipo=tipo, idioma_tmdb=_idioma_tmdb_atual(request))
 
     minha_avaliacao = None
@@ -228,14 +228,6 @@ def _garantir_dados_completos(item, tipo, idioma_tmdb=None):
         logger.exception("Falha ao completar dados de %s #%s", tipo, item.pk)
 
 
-def _sem_notas_omdb(item):
-    return (
-        item.nota_publico is None
-        and item.nota_critica is None
-        and item.nota_rotten_tomatoes is None
-    )
-
-
 def _completar_imdb_id(item, tipo, idioma_tmdb):
     """Resolve e salva o `imdb_id` de um título que já tem `id_externo`
     (TMDB) mas ainda não tem o `imdb_id` guardado — caso dos títulos
@@ -271,7 +263,11 @@ def _garantir_notas_omdb(item, tipo=None, idioma_tmdb=None):
     `imdb_id` salvo (títulos antigos, cadastrados antes desse campo
     existir), tenta resolver ele primeiro a partir do `id_externo` (TMDB)
     que já temos — assim os títulos antigos também passam a se autocorrigir,
-    e não só os novos."""
+    e não só os novos.
+
+    Só tenta uma vez por título (controlado por `notas_omdb_verificadas`) —
+    depois disso fica valendo o que foi encontrado, mesmo que seja só
+    ALGUMA das 3 notas (o OMDb nem sempre tem as 3 pra um título)."""
     if not busca_externa.omdb_configurado():
         return
     if not item.imdb_id and tipo in ("filme", "serie"):
@@ -283,16 +279,18 @@ def _garantir_notas_omdb(item, tipo=None, idioma_tmdb=None):
     except Exception:
         logger.exception("Falha ao buscar notas do OMDb pra %r", item.titulo)
         return
-    campos_com_nota = [
-        campo
-        for campo in ("nota_publico", "nota_critica", "nota_rotten_tomatoes")
-        if notas.get(campo) is not None
-    ]
-    if campos_com_nota:
-        item.nota_publico = notas.get("nota_publico")
-        item.nota_critica = notas.get("nota_critica")
-        item.nota_rotten_tomatoes = notas.get("nota_rotten_tomatoes")
-        item.save(update_fields=["nota_publico", "nota_critica", "nota_rotten_tomatoes"])
+    # Só sobrescreve cada campo se achou uma nota nova pra ele — assim, se
+    # essa tentativa falhar em achar algo que a gente já tinha (ex: falha
+    # passageira do OMDb), não perde o que já estava salvo.
+    item.nota_publico = notas.get("nota_publico") or item.nota_publico
+    item.nota_critica = notas.get("nota_critica") or item.nota_critica
+    item.nota_rotten_tomatoes = notas.get("nota_rotten_tomatoes") or item.nota_rotten_tomatoes
+    item.notas_omdb_verificadas = True
+    item.save(
+        update_fields=[
+            "nota_publico", "nota_critica", "nota_rotten_tomatoes", "notas_omdb_verificadas",
+        ]
+    )
 
 
 def _melhor_correspondencia(encontrados, item):
@@ -346,7 +344,7 @@ def _completar_filme(item, idioma_tmdb):
         item.imdb_id = info["imdb_id"]
     item.dados_completos = True
     item.save()
-    if _sem_notas_omdb(item):
+    if not item.notas_omdb_verificadas:
         _garantir_notas_omdb(item, tipo="filme", idioma_tmdb=idioma_tmdb)
     if elenco:
         _importar_elenco(item, elenco)
@@ -386,7 +384,7 @@ def _completar_serie(item, idioma_tmdb):
         item.imdb_id = info["imdb_id"]
     item.dados_completos = True
     item.save()
-    if _sem_notas_omdb(item):
+    if not item.notas_omdb_verificadas:
         _garantir_notas_omdb(item, tipo="serie", idioma_tmdb=idioma_tmdb)
     if elenco:
         _importar_elenco(item, elenco)

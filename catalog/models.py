@@ -76,6 +76,13 @@ class Titulo(models.Model):
     # nota_rotten_tomatoes: % de aprovação no Rotten Tomatoes (via OMDb).
     # Também só existe pra filme/série.
     nota_rotten_tomatoes = models.IntegerField("nota Rotten Tomatoes (%)", null=True, blank=True)
+    # True depois que já tentamos buscar as notas no OMDb pelo menos uma vez
+    # (independente do resultado). Precisa ser um campo separado, e não só
+    # "os 3 campos de nota estão vazios?", porque nem todo título tem as 3
+    # notas no OMDb — é normal um filme ter nota do público e não ter
+    # Rotten Tomatoes, por exemplo. Sem esse campo, um título que já achou
+    # ALGUMA nota nunca tentaria buscar a que ainda falta.
+    notas_omdb_verificadas = models.BooleanField("notas do OMDb já verificadas", default=False)
 
     # ID do título no IMDb (ex: "tt1234567"), obtido via TMDB. Usado pra
     # buscar as notas no OMDb por ID em vez de por texto — muito mais
