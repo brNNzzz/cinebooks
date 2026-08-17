@@ -149,7 +149,9 @@ def detalhes_filme(tmdb_id, idioma=IDIOMA_TMDB_PADRAO):
     """Devolve um dict com os dados completos do filme (inclusive elenco),
     ou None se a busca falhar."""
     try:
-        dados = _tmdb_get(f"/movie/{tmdb_id}", {"append_to_response": "credits"}, idioma=idioma)
+        dados = _tmdb_get(
+            f"/movie/{tmdb_id}", {"append_to_response": "credits,external_ids"}, idioma=idioma
+        )
     except (requests.RequestException, ValueError) as erro:
         logger.warning("Falha ao buscar detalhes do filme %r no TMDB: %s", tmdb_id, erro)
         return None
@@ -170,6 +172,12 @@ def detalhes_filme(tmdb_id, idioma=IDIOMA_TMDB_PADRAO):
         "poster_url": f"{TMDB_IMAGE_BASE_URL}{poster_path}" if poster_path else "",
         "generos": [g["name"].title() for g in dados.get("genres") or []],
         "elenco": _extrair_elenco(dados),
+        # ID do IMDb (ex: "tt1160419") — vem de graça nessa mesma chamada
+        # (append_to_response=external_ids), sem gastar requisição extra.
+        # Usado depois pra buscar as notas no OMDb de forma exata (por ID em
+        # vez de por texto do título, que falha quando o título está
+        # traduzido pro idioma do site).
+        "imdb_id": (dados.get("external_ids") or {}).get("imdb_id") or "",
     }
 
 
@@ -177,7 +185,9 @@ def detalhes_serie(tmdb_id, idioma=IDIOMA_TMDB_PADRAO):
     """Devolve um dict com os dados completos da série (inclusive elenco),
     ou None se a busca falhar."""
     try:
-        dados = _tmdb_get(f"/tv/{tmdb_id}", {"append_to_response": "credits"}, idioma=idioma)
+        dados = _tmdb_get(
+            f"/tv/{tmdb_id}", {"append_to_response": "credits,external_ids"}, idioma=idioma
+        )
     except (requests.RequestException, ValueError) as erro:
         logger.warning("Falha ao buscar detalhes da série %r no TMDB: %s", tmdb_id, erro)
         return None
@@ -194,6 +204,7 @@ def detalhes_serie(tmdb_id, idioma=IDIOMA_TMDB_PADRAO):
         "poster_url": f"{TMDB_IMAGE_BASE_URL}{poster_path}" if poster_path else "",
         "generos": [g["name"].title() for g in dados.get("genres") or []],
         "elenco": _extrair_elenco(dados),
+        "imdb_id": (dados.get("external_ids") or {}).get("imdb_id") or "",
     }
 
 
@@ -201,25 +212,36 @@ def omdb_configurado():
     return bool(getattr(settings, "OMDB_API_KEY", ""))
 
 
-def buscar_notas_omdb(titulo, ano):
-    """Busca no OMDb (omdbapi.com) a nota do público (IMDb) e a nota da
-    crítica (Metacritic) de um filme ou série, pelo título + ano. Devolve um
-    dict {"nota_publico": float|None, "nota_critica": float|None} — nunca
-    lança erro, só devolve tudo None se algo falhar ou não tiver a chave
-    configurada."""
-    vazio = {"nota_publico": None, "nota_critica": None}
+def buscar_notas_omdb(titulo, ano, imdb_id=""):
+    """Busca no OMDb (omdbapi.com) a nota do público (IMDb), a nota da
+    crítica (Metacritic) e a % do Rotten Tomatoes de um filme ou série.
+    Devolve um dict {"nota_publico": float|None, "nota_critica": float|None,
+    "nota_rotten_tomatoes": int|None} — nunca lança erro, só devolve tudo
+    None se algo falhar ou não tiver a chave configurada.
+
+    Sempre que tivermos o `imdb_id` (ex: "tt1160419", que vem de graça junto
+    com os detalhes do TMDB), buscamos por ELE em vez de por título+ano —
+    é uma busca exata, então funciona mesmo com o título traduzido pro
+    idioma do site (o OMDb é uma base majoritariamente em inglês, então
+    buscar por texto o título em português/espanhol/etc. costuma falhar e
+    devolver nada, nem nota do público nem da crítica)."""
+    vazio = {"nota_publico": None, "nota_critica": None, "nota_rotten_tomatoes": None}
     chave = getattr(settings, "OMDB_API_KEY", "")
-    if not chave or not titulo:
+    if not chave or (not titulo and not imdb_id):
         return vazio
     try:
-        resposta = requests.get(
-            OMDB_BASE_URL,
-            params={"apikey": chave, "t": titulo, "y": ano or ""},
-            timeout=TIMEOUT_SEGUNDOS,
-        )
+        if imdb_id:
+            parametros = {"apikey": chave, "i": imdb_id}
+        else:
+            parametros = {"apikey": chave, "t": titulo, "y": ano or ""}
+        resposta = requests.get(OMDB_BASE_URL, params=parametros, timeout=TIMEOUT_SEGUNDOS)
         resposta.raise_for_status()
         dados = resposta.json()
         if dados.get("Response") != "True":
+            # Se buscamos por ID e falhou (raro, mas pode acontecer com dado
+            # inconsistente), tenta de novo por título+ano como reserva.
+            if imdb_id and titulo:
+                return buscar_notas_omdb(titulo, ano)
             return vazio
 
         nota_publico = None
@@ -231,20 +253,32 @@ def buscar_notas_omdb(titulo, ano):
                 nota_publico = None
 
         nota_critica = None
+        nota_rotten_tomatoes = None
         for avaliacao in dados.get("Ratings") or []:
-            if avaliacao.get("Source") == "Metacritic":
-                valor = (avaliacao.get("Value") or "").split("/")[0]
+            fonte = avaliacao.get("Source")
+            valor_bruto = avaliacao.get("Value") or ""
+            if fonte == "Metacritic":
+                valor = valor_bruto.split("/")[0]
                 try:
                     # Metacritic é de 0 a 100 — convertemos pra escala de 0 a 10,
                     # igual às outras notas do site, pra ficar fácil de comparar.
                     nota_critica = round(float(valor) / 10, 1)
                 except ValueError:
                     nota_critica = None
-                break
+            elif fonte == "Rotten Tomatoes":
+                valor = valor_bruto.replace("%", "").strip()
+                try:
+                    nota_rotten_tomatoes = int(float(valor))
+                except ValueError:
+                    nota_rotten_tomatoes = None
 
-        return {"nota_publico": nota_publico, "nota_critica": nota_critica}
+        return {
+            "nota_publico": nota_publico,
+            "nota_critica": nota_critica,
+            "nota_rotten_tomatoes": nota_rotten_tomatoes,
+        }
     except (requests.RequestException, ValueError) as erro:
-        logger.warning("Falha ao buscar notas de %r no OMDb: %s", titulo, erro)
+        logger.warning("Falha ao buscar notas de %r no OMDb: %s", titulo or imdb_id, erro)
         return vazio
 
 

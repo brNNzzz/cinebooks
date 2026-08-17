@@ -21,11 +21,12 @@
             <p class="text-muted mb-1">{% t "detalhe_sem_avaliacoes_site" %}</p>
         {% endif %}
 
-        {% if item.nota_publico or item.nota_critica %}
+        {% if item.nota_publico or item.nota_critica or item.nota_rotten_tomatoes %}
             <p class="text-muted small mb-3">
                 {% t "detalhe_notas_internet" %}
                 {% if item.nota_publico %}<span class="badge bg-primary">{% t "detalhe_publico" %}: {{ item.nota_publico }}/10</span>{% endif %}
                 {% if item.nota_critica %}<span class="badge bg-info text-dark">{% t "detalhe_critica" %}: {{ item.nota_critica }}/10</span>{% endif %}
+                {% if item.nota_rotten_tomatoes %}<span class="badge bg-danger">🍅 Rotten Tomatoes: {{ item.nota_rotten_tomatoes }}%</span>{% endif %}
             </p>
         {% endif %}
 

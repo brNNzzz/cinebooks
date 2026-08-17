@@ -127,13 +127,13 @@ def detalhe(request, tipo, pk):
             daemon=True,
         ).start()
 
-    # As notas (público/crítica) a gente busca NA HORA, mesmo sem esperar o
-    # resto (elenco, sinopse maior) — é só 1 chamada rápida ao OMDb, então dá
-    # pra fazer isso sem travar a página, e assim a nota já aparece na
-    # primeira visita em vez de só depois que o resto terminar de completar
-    # em segundo plano.
-    if tipo in ("filme", "serie") and item.nota_publico is None and item.nota_critica is None:
-        _garantir_notas_omdb(item)
+    # As notas (público/crítica/Rotten Tomatoes) a gente busca NA HORA, mesmo
+    # sem esperar o resto (elenco, sinopse maior) — é só 1 chamada rápida ao
+    # OMDb, então dá pra fazer isso sem travar a página, e assim a nota já
+    # aparece na primeira visita em vez de só depois que o resto terminar de
+    # completar em segundo plano.
+    if tipo in ("filme", "serie") and _sem_notas_omdb(item):
+        _garantir_notas_omdb(item, tipo=tipo, idioma_tmdb=_idioma_tmdb_atual(request))
 
     minha_avaliacao = None
     if request.user.is_authenticated:
@@ -228,23 +228,71 @@ def _garantir_dados_completos(item, tipo, idioma_tmdb=None):
         logger.exception("Falha ao completar dados de %s #%s", tipo, item.pk)
 
 
-def _garantir_notas_omdb(item):
-    """Busca as notas de público/crítica no OMDb e salva, se ainda não
-    tiver. Feito separado do resto do "completar dados" (elenco, sinopse)
-    porque é só 1 chamada rápida — dá pra fazer na hora, sem precisar
-    esperar a thread de segundo plano, então a nota já aparece na primeira
-    visita à página."""
+def _sem_notas_omdb(item):
+    return (
+        item.nota_publico is None
+        and item.nota_critica is None
+        and item.nota_rotten_tomatoes is None
+    )
+
+
+def _completar_imdb_id(item, tipo, idioma_tmdb):
+    """Resolve e salva o `imdb_id` de um título que já tem `id_externo`
+    (TMDB) mas ainda não tem o `imdb_id` guardado — caso dos títulos
+    cadastrados ANTES desse campo existir. Sem isso, esses títulos ficariam
+    pra sempre buscando a nota no OMDb por texto do título (que falha toda
+    vez que o título está traduzido), mesmo já sabendo o ID do TMDB."""
+    if not item.id_externo:
+        return
+    idioma_tmdb = idioma_tmdb or busca_externa.IDIOMA_TMDB_PADRAO
+    try:
+        if tipo == "filme":
+            info = busca_externa.detalhes_filme(item.id_externo, idioma=idioma_tmdb)
+        else:
+            info = busca_externa.detalhes_serie(item.id_externo, idioma=idioma_tmdb)
+    except Exception:
+        logger.exception("Falha ao resolver imdb_id de %r no TMDB", item.titulo)
+        return
+    if info and info.get("imdb_id"):
+        item.imdb_id = info["imdb_id"]
+        item.save(update_fields=["imdb_id"])
+
+
+def _garantir_notas_omdb(item, tipo=None, idioma_tmdb=None):
+    """Busca as notas de público/crítica/Rotten Tomatoes no OMDb e salva, se
+    ainda não tiver. Feito separado do resto do "completar dados" (elenco,
+    sinopse) porque é só 1 chamada rápida — dá pra fazer na hora, sem
+    precisar esperar a thread de segundo plano, então a nota já aparece na
+    primeira visita à página.
+
+    Usa o `imdb_id` do título (se já tiver) pra buscar por ID em vez de por
+    texto do título — muito mais confiável, porque o OMDb é majoritariamente
+    em inglês e falha fácil com título traduzido. Se o título ainda não tem
+    `imdb_id` salvo (títulos antigos, cadastrados antes desse campo
+    existir), tenta resolver ele primeiro a partir do `id_externo` (TMDB)
+    que já temos — assim os títulos antigos também passam a se autocorrigir,
+    e não só os novos."""
     if not busca_externa.omdb_configurado():
         return
+    if not item.imdb_id and tipo in ("filme", "serie"):
+        _completar_imdb_id(item, tipo, idioma_tmdb)
     try:
-        notas = busca_externa.buscar_notas_omdb(item.titulo, item.ano_lancamento)
+        notas = busca_externa.buscar_notas_omdb(
+            item.titulo, item.ano_lancamento, imdb_id=item.imdb_id
+        )
     except Exception:
         logger.exception("Falha ao buscar notas do OMDb pra %r", item.titulo)
         return
-    if notas.get("nota_publico") is not None or notas.get("nota_critica") is not None:
+    campos_com_nota = [
+        campo
+        for campo in ("nota_publico", "nota_critica", "nota_rotten_tomatoes")
+        if notas.get(campo) is not None
+    ]
+    if campos_com_nota:
         item.nota_publico = notas.get("nota_publico")
         item.nota_critica = notas.get("nota_critica")
-        item.save(update_fields=["nota_publico", "nota_critica"])
+        item.nota_rotten_tomatoes = notas.get("nota_rotten_tomatoes")
+        item.save(update_fields=["nota_publico", "nota_critica", "nota_rotten_tomatoes"])
 
 
 def _melhor_correspondencia(encontrados, item):
@@ -294,10 +342,12 @@ def _completar_filme(item, idioma_tmdb):
         item.sinopse = info["sinopse"]
     if not item.poster_url and info.get("poster_url"):
         item.poster_url = info["poster_url"]
+    if not item.imdb_id and info.get("imdb_id"):
+        item.imdb_id = info["imdb_id"]
     item.dados_completos = True
     item.save()
-    if item.nota_publico is None and item.nota_critica is None:
-        _garantir_notas_omdb(item)
+    if _sem_notas_omdb(item):
+        _garantir_notas_omdb(item, tipo="filme", idioma_tmdb=idioma_tmdb)
     if elenco:
         _importar_elenco(item, elenco)
     if generos:
@@ -332,10 +382,12 @@ def _completar_serie(item, idioma_tmdb):
         item.sinopse = info["sinopse"]
     if not item.poster_url and info.get("poster_url"):
         item.poster_url = info["poster_url"]
+    if not item.imdb_id and info.get("imdb_id"):
+        item.imdb_id = info["imdb_id"]
     item.dados_completos = True
     item.save()
-    if item.nota_publico is None and item.nota_critica is None:
-        _garantir_notas_omdb(item)
+    if _sem_notas_omdb(item):
+        _garantir_notas_omdb(item, tipo="serie", idioma_tmdb=idioma_tmdb)
     if elenco:
         _importar_elenco(item, elenco)
     if generos:

@@ -18,7 +18,7 @@ class PessoaAdmin(admin.ModelAdmin):
 class FilmeAdmin(admin.ModelAdmin):
     list_display = [
         "titulo", "ano_lancamento", "diretor", "duracao_minutos",
-        "nota_publico", "nota_critica", "dados_completos",
+        "nota_publico", "nota_critica", "nota_rotten_tomatoes", "dados_completos",
     ]
     list_filter = ["generos", "ano_lancamento", "dados_completos"]
     search_fields = ["titulo", "diretor"]
@@ -29,7 +29,7 @@ class FilmeAdmin(admin.ModelAdmin):
 class SerieAdmin(admin.ModelAdmin):
     list_display = [
         "titulo", "ano_lancamento", "criador", "numero_temporadas",
-        "nota_publico", "nota_critica", "dados_completos",
+        "nota_publico", "nota_critica", "nota_rotten_tomatoes", "dados_completos",
     ]
     list_filter = ["generos", "ano_lancamento", "dados_completos"]
     search_fields = ["titulo", "criador"]

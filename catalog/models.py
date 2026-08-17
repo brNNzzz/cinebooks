@@ -73,6 +73,15 @@ class Titulo(models.Model):
     # nota_critica: nota da crítica especializada (Metacritic, via OMDb).
     # Só existe pra filme/série — livro não tem um "Metacritic" equivalente.
     nota_critica = models.FloatField("nota da crítica (internet)", null=True, blank=True)
+    # nota_rotten_tomatoes: % de aprovação no Rotten Tomatoes (via OMDb).
+    # Também só existe pra filme/série.
+    nota_rotten_tomatoes = models.IntegerField("nota Rotten Tomatoes (%)", null=True, blank=True)
+
+    # ID do título no IMDb (ex: "tt1234567"), obtido via TMDB. Usado pra
+    # buscar as notas no OMDb por ID em vez de por texto — muito mais
+    # confiável, já que buscar por título+ano falha sempre que o título
+    # está traduzido (ex: "Duna" não bate com "Dune" no OMDb).
+    imdb_id = models.CharField("ID no IMDb", max_length=20, blank=True)
 
     # Guarda o ID do título na API externa (TMDB para filme/série, Open
     # Library para livro). Usado depois pra completar os dados (elenco,

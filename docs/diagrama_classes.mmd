@@ -1,0 +1,68 @@
+classDiagram
+    direction LR
+
+    class Genero {
+        +nome: str
+    }
+
+    class Pessoa {
+        +nome: str
+        +foto_url: str
+    }
+
+    class Titulo {
+        <<abstract>>
+        +titulo: str
+        +sinopse: str
+        +ano_lancamento: int
+        +poster_url: str
+        +criado_em: datetime
+        +nota_publico: float
+        +nota_critica: float
+        +nota_rotten_tomatoes: int
+        +imdb_id: str
+        +id_externo: str
+        +dados_completos: bool
+        +media_avaliacoes()
+        +total_avaliacoes()
+    }
+
+    class Filme {
+        +diretor: str
+        +duracao_minutos: int
+    }
+
+    class Serie {
+        +criador: str
+        +numero_temporadas: int
+    }
+
+    class Livro {
+        +autor: str
+        +editora: str
+        +numero_paginas: int
+    }
+
+    class Avaliacao {
+        +nota: int
+        +comentario: str
+        +criado_em: datetime
+        +object_id: int
+    }
+
+    class User {
+        <<Django>>
+        +username: str
+    }
+
+    Titulo <|-- Filme
+    Titulo <|-- Serie
+    Titulo <|-- Livro
+
+    Titulo "0..*" -- "0..*" Genero : generos
+    Filme "0..*" -- "0..*" Pessoa : elenco
+    Serie "0..*" -- "0..*" Pessoa : elenco
+    Livro "0..*" --> "0..1" Pessoa : autor_pessoa
+
+    Avaliacao "0..*" --> "1" User : usuario
+    Avaliacao "0..*" ..> Titulo : titulo_avaliado (Generic FK)
