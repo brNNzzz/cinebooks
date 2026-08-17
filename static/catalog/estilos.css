@@ -55,12 +55,40 @@ body {
 
 .destaque-info {
     min-width: 0; /* pro texto poder quebrar linha certo dentro do flex */
+    /* Espaço reservado pra seta de "próximo" não ficar em cima do texto. */
+    padding-right: 3rem;
 }
 
 @media (min-width: 768px) {
     .destaque-poster {
         width: 260px;
     }
+}
+
+/* Setas de trocar manualmente: por padrão o Bootstrap deixa uma faixa
+   clicável larga (15% da largura) com a seta bem no meio dela, o que
+   fazia a seta ficar longe da borda de verdade e em cima do texto. Aqui a
+   faixa fica bem mais estreita e a seta é colada na borda esquerda/direita
+   da tela. */
+.destaque-topo .carousel-control-prev,
+.destaque-topo .carousel-control-next {
+    width: 3rem;
+    opacity: 0.6;
+}
+
+.destaque-topo .carousel-control-prev {
+    justify-content: flex-start;
+    padding-left: 0.5rem;
+}
+
+.destaque-topo .carousel-control-next {
+    justify-content: flex-end;
+    padding-right: 0.5rem;
+}
+
+.destaque-topo .carousel-control-prev:hover,
+.destaque-topo .carousel-control-next:hover {
+    opacity: 1;
 }
 
 /* Efeito de troca de slide: desliza pro lado E vai desaparecendo (fade)

@@ -102,6 +102,16 @@ class Titulo(models.Model):
         "idioma do conteúdo cadastrado", max_length=10, blank=True, default="pt-BR"
     )
 
+    # Cache de título/sinopse traduzidos, um por idioma do site (ex:
+    # {"en-US": {"titulo": "...", "sinopse": "..."}}). É só um "extra" pra
+    # EXIBIÇÃO: quando alguém navega no site num idioma diferente do
+    # `idioma_tmdb_conteudo`, mostramos a tradução daqui (se já tiver sido
+    # buscada) em vez do texto original. Os campos `titulo`/`sinopse` lá em
+    # cima NUNCA são sobrescritos por isso — continuam sempre no idioma
+    # original, pra não repetir o bug de misturar idiomas dentro do mesmo
+    # registro.
+    traducoes = models.JSONField("traduções para exibição", default=dict, blank=True)
+
     # Guarda o ID do título na API externa (TMDB para filme/série, Open
     # Library para livro). Usado depois pra completar os dados (elenco,
     # sinopse maior) sem precisar buscar o título de novo pelo nome.

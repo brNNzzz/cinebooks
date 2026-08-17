@@ -12,19 +12,19 @@
                     <div class="d-flex flex-column flex-md-row align-items-center gap-4 p-4 p-md-5">
                         <img
                             src="{{ item.poster_url|default:'https://placehold.co/300x450/1f2937/ffffff?text=Sem+imagem' }}"
-                            class="destaque-poster rounded-3 shadow flex-shrink-0" alt="Pôster de {{ item.titulo }}">
+                            class="destaque-poster rounded-3 shadow flex-shrink-0" alt="Pôster de {{ item.titulo_exibicao }}">
                         <div class="text-white destaque-info">
                             <p class="text-uppercase small fw-semibold text-white-50 mb-1">
                                 {% if item.tipo == "filme" %}🎬 {% t "busca_filmes" %}{% elif item.tipo == "serie" %}📺 {% t "busca_series" %}{% else %}📚 {% t "busca_livros" %}{% endif %}
                             </p>
-                            <h1 class="h2 fw-bold mb-2">{{ item.titulo }} <small class="text-white-50">({{ item.ano_lancamento }})</small></h1>
+                            <h1 class="h2 fw-bold mb-2">{{ item.titulo_exibicao }} <small class="text-white-50">({{ item.ano_lancamento }})</small></h1>
                             <p class="mb-3">
                                 {% if item.nota_publico %}<span class="badge bg-warning text-dark">⭐ {{ item.nota_publico }}/10</span>{% endif %}
                                 {% if item.nota_critica %}<span class="badge bg-info text-dark">🎯 {{ item.nota_critica }}/10</span>{% endif %}
                                 {% if item.nota_rotten_tomatoes %}<span class="badge bg-danger">🍅 {{ item.nota_rotten_tomatoes }}%</span>{% endif %}
                             </p>
-                            {% if item.sinopse %}
-                                <p class="text-white-50">{{ item.sinopse }}</p>
+                            {% if item.sinopse_exibicao %}
+                                <p class="text-white-50">{{ item.sinopse_exibicao }}</p>
                             {% endif %}
                             <a href="{% url 'detalhe' item.tipo item.pk %}" class="btn btn-light">{% t "home_ver_detalhes" %}</a>
                         </div>

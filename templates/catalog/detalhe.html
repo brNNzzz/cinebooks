@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% load i18n_custom %}
 
-{% block titulo %}{{ item.titulo }} — CineBooks{% endblock %}
+{% block titulo %}{{ item.titulo_exibicao }} — CineBooks{% endblock %}
 
 {% block conteudo %}
 <a href="{% url 'lista' tipo %}" class="btn btn-sm btn-outline-secondary mb-3">&larr; {% t "detalhe_voltar" %}</a>
@@ -9,11 +9,11 @@
 <div class="row">
     <div class="col-md-3 mb-4">
         <img src="{{ item.poster_url|default:'https://placehold.co/400x600/1f2937/ffffff?text=Sem+imagem' }}"
-             class="poster" alt="Pôster de {{ item.titulo }}">
+             class="poster" alt="Pôster de {{ item.titulo_exibicao }}">
     </div>
     <div class="col-md-9">
         <span class="badge bg-secondary mb-2">{{ rotulo }}</span>
-        <h1 class="h3">{{ item.titulo }} <small class="text-muted">({{ item.ano_lancamento }})</small></h1>
+        <h1 class="h3">{{ item.titulo_exibicao }} <small class="text-muted">({{ item.ano_lancamento }})</small></h1>
 
         {% if media %}
             <p class="fs-5 mb-1">⭐ <strong>{{ media }}</strong> / 5 &middot; {{ item.total_avaliacoes }} {% t "detalhe_avaliacoes_no_site" %}</p>
@@ -47,7 +47,7 @@
             {% endif %}
         </ul>
 
-        <p>{{ item.sinopse|default:"" }}{% if not item.sinopse %}{% t "detalhe_sem_sinopse" %}{% endif %}</p>
+        <p>{{ item.sinopse_exibicao|default:"" }}{% if not item.sinopse_exibicao %}{% t "detalhe_sem_sinopse" %}{% endif %}</p>
 
         {% if tipo == "livro" and item.autor_pessoa %}
             <div class="d-flex align-items-center gap-2 mt-3">

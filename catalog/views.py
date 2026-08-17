@@ -36,8 +36,73 @@ def _com_media(queryset):
 
 LIMITE_DESTAQUES_ANO = 18  # quantos títulos aparecem no carrossel do topo
 
+# Guarda quais (modelo, pk, idioma) já têm uma tradução sendo buscada agora,
+# pra não disparar várias threads fazendo a mesma tradução em paralelo.
+_TRADUZINDO_AGORA = set()
+_TRADUZINDO_AGORA_LOCK = threading.Lock()
 
-def _destaques_do_ano():
+
+def _traduzir_em_segundo_plano(pk, model, tipo, idioma):
+    """Busca o título/sinopse desse item no idioma pedido e guarda no cache
+    `traducoes`, SEM tocar nos campos `titulo`/`sinopse` originais. Roda numa
+    thread separada pra não travar a página — na primeira vez que alguém vê
+    esse item nesse idioma, ainda aparece o texto original; da próxima vez
+    (ou pra outra pessoa), já aparece traduzido."""
+    chave = (model.__name__, pk, idioma)
+    with _TRADUZINDO_AGORA_LOCK:
+        if chave in _TRADUZINDO_AGORA:
+            return
+        _TRADUZINDO_AGORA.add(chave)
+    try:
+        item = model.objects.get(pk=pk)
+        if not item.id_externo:
+            return
+        if tipo == "filme":
+            info = busca_externa.detalhes_filme(item.id_externo, idioma=idioma)
+        else:
+            info = busca_externa.detalhes_serie(item.id_externo, idioma=idioma)
+        if not info or not info.get("titulo"):
+            return
+        cache = dict(item.traducoes or {})
+        cache[idioma] = {
+            "titulo": info.get("titulo") or item.titulo,
+            "sinopse": info.get("sinopse") or item.sinopse,
+        }
+        item.traducoes = cache
+        item.save(update_fields=["traducoes"])
+    except model.DoesNotExist:
+        pass
+    except Exception:
+        logger.exception("Falha ao traduzir %s #%s pro idioma %s", tipo, pk, idioma)
+    finally:
+        connections.close_all()
+        with _TRADUZINDO_AGORA_LOCK:
+            _TRADUZINDO_AGORA.discard(chave)
+
+
+def _texto_no_idioma(item, tipo, idioma_atual):
+    """Devolve (titulo, sinopse) pra EXIBIR pra quem está navegando em
+    `idioma_atual`. Se for o mesmo idioma em que o item foi cadastrado, usa
+    o texto original de sempre. Se for outro idioma e já tivermos uma
+    tradução cacheada, usa ela. Se ainda não tivermos, dispara uma busca em
+    segundo plano (sem travar a página) e por enquanto mostra o texto
+    original — assim o site nunca mistura idiomas dentro do mesmo texto, só
+    pode demorar uma visita pra tradução aparecer pronta."""
+    if not idioma_atual or idioma_atual == item.idioma_tmdb_conteudo:
+        return item.titulo, item.sinopse
+    traducao = (item.traducoes or {}).get(idioma_atual)
+    if traducao:
+        return traducao.get("titulo") or item.titulo, traducao.get("sinopse") or item.sinopse
+    if tipo in ("filme", "serie") and item.id_externo:
+        threading.Thread(
+            target=_traduzir_em_segundo_plano,
+            args=(item.pk, type(item), tipo, idioma_atual),
+            daemon=True,
+        ).start()
+    return item.titulo, item.sinopse
+
+
+def _destaques_do_ano(idioma_atual=None):
     """Uma ÚNICA fileira horizontal, logo abaixo do cabeçalho — junta filme,
     série e livro do ano ATUAL (o ano civil de verdade, tipo 2026), do mais
     bem avaliado pro menos avaliado. Igual à fileira de destaque do topo da
@@ -65,6 +130,7 @@ def _destaques_do_ano():
     for tipo, model in modelos:
         for item in model.objects.filter(ano_lancamento=ano):
             item.tipo = tipo
+            item.titulo_exibicao, item.sinopse_exibicao = _texto_no_idioma(item, tipo, idioma_atual)
             itens.append(item)
 
     # Ordena todo mundo junto (filme, série e livro misturados) pela nota do
@@ -75,7 +141,7 @@ def _destaques_do_ano():
 
 def home(request):
     contexto = {
-        "destaques_do_ano": _destaques_do_ano(),
+        "destaques_do_ano": _destaques_do_ano(_idioma_tmdb_atual(request)),
         "filmes": _com_media(Filme.objects.all()).order_by("-ano_lancamento")[:4],
         "series": _com_media(Serie.objects.all()).order_by("-ano_lancamento")[:4],
         "livros": _com_media(Livro.objects.all()).order_by("-ano_lancamento")[:4],
@@ -175,6 +241,13 @@ def detalhe(request, tipo, pk):
     # completar em segundo plano.
     if tipo in ("filme", "serie") and not item.notas_omdb_verificadas:
         _garantir_notas_omdb(item, tipo=tipo)
+
+    # Mostra título/sinopse no idioma em que a pessoa está navegando o site
+    # agora (se já tivermos essa tradução pronta) — sem nunca sobrescrever
+    # o texto original do item (ver _texto_no_idioma).
+    item.titulo_exibicao, item.sinopse_exibicao = _texto_no_idioma(
+        item, tipo, _idioma_tmdb_atual(request)
+    )
 
     minha_avaliacao = None
     if request.user.is_authenticated:
