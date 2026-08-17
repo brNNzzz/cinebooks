@@ -4,10 +4,49 @@
 {% block titulo %}CineBooks — Filmes, Séries e Livros{% endblock %}
 
 {% block conteudo %}
-<div class="p-5 mb-4 bg-body-tertiary rounded-3">
-    <h1 class="display-6 fw-bold">{% t "home_bem_vindo" %}</h1>
-    <p class="col-lg-8 fs-5">{% t "home_intro" %}</p>
-</div>
+{% if destaques_do_ano.itens %}
+    <div id="carrosselDestaques" class="destaque-topo carousel slide mb-4" data-bs-ride="carousel" data-bs-interval="8000">
+        <div class="carousel-inner">
+            {% for item in destaques_do_ano.itens %}
+                <div class="carousel-item {% if forloop.first %}active{% endif %}">
+                    <div class="d-flex flex-column flex-md-row align-items-center gap-4 p-4 p-md-5">
+                        <img
+                            src="{{ item.poster_url|default:'https://placehold.co/300x450/1f2937/ffffff?text=Sem+imagem' }}"
+                            class="destaque-poster rounded-3 shadow flex-shrink-0" alt="Pôster de {{ item.titulo }}">
+                        <div class="text-white destaque-info">
+                            <p class="text-uppercase small fw-semibold text-white-50 mb-1">
+                                {% if item.tipo == "filme" %}🎬 {% t "busca_filmes" %}{% elif item.tipo == "serie" %}📺 {% t "busca_series" %}{% else %}📚 {% t "busca_livros" %}{% endif %}
+                            </p>
+                            <h1 class="h2 fw-bold mb-2">{{ item.titulo }} <small class="text-white-50">({{ item.ano_lancamento }})</small></h1>
+                            <p class="mb-3">
+                                {% if item.nota_publico %}<span class="badge bg-warning text-dark">⭐ {{ item.nota_publico }}/10</span>{% endif %}
+                                {% if item.nota_critica %}<span class="badge bg-info text-dark">🎯 {{ item.nota_critica }}/10</span>{% endif %}
+                                {% if item.nota_rotten_tomatoes %}<span class="badge bg-danger">🍅 {{ item.nota_rotten_tomatoes }}%</span>{% endif %}
+                            </p>
+                            {% if item.sinopse %}
+                                <p class="text-white-50">{{ item.sinopse }}</p>
+                            {% endif %}
+                            <a href="{% url 'detalhe' item.tipo item.pk %}" class="btn btn-light">{% t "home_ver_detalhes" %}</a>
+                        </div>
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+        {% if destaques_do_ano.itens|length > 1 %}
+            <button class="carousel-control-prev" type="button" data-bs-target="#carrosselDestaques" data-bs-slide="prev">
+                <span class="carousel-control-prev-icon" aria-hidden="true"></span>
+            </button>
+            <button class="carousel-control-next" type="button" data-bs-target="#carrosselDestaques" data-bs-slide="next">
+                <span class="carousel-control-next-icon" aria-hidden="true"></span>
+            </button>
+            <div class="carousel-indicators">
+                {% for item in destaques_do_ano.itens %}
+                    <button type="button" data-bs-target="#carrosselDestaques" data-bs-slide-to="{{ forloop.counter0 }}" {% if forloop.first %}class="active"{% endif %}></button>
+                {% endfor %}
+            </div>
+        {% endif %}
+    </div>
+{% endif %}
 
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h2 class="h4 mb-0">🎬 {% t "home_filmes_recentes" %}</h2>

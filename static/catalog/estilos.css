@@ -1,3 +1,9 @@
+/* Evita que o carrossel "full-bleed" (largura 100vw, veja .destaque-topo
+   mais abaixo) crie uma barrinha de rolagem horizontal indesejada. */
+body {
+    overflow-x: hidden;
+}
+
 .poster {
     width: 100%;
     aspect-ratio: 2 / 3;
@@ -17,6 +23,60 @@
 
 .nota-badge {
     font-size: 1rem;
+}
+
+/* Carrossel de destaque do ano (estilo Netflix), no topo da home — 1
+   título por vez, com pôster grande e sinopse completa; troca sozinho a
+   cada 8s (e também pelas setas/pontinhos/arrastando no celular). Usa o
+   componente Carousel do próprio Bootstrap (já carregado no site), então
+   não precisa de nenhuma biblioteca de JS a mais.
+
+   Fica "colado" no menu (sem espaço entre os dois) e ocupa a largura
+   inteira da tela, de ponta a ponta — mesmo a página inteira sendo
+   centralizada num container mais estreito. O truque: cancela a margem
+   que o menu deixa embaixo dele (mb-4 = 1.5rem) e usa a técnica clássica
+   de "furar" o container (largura = 100% da tela, puxando as bordas pra
+   fora com margem negativa). */
+.destaque-topo {
+    background: linear-gradient(135deg, #14141c, #1f1f2e);
+    overflow: hidden;
+    width: 100vw;
+    max-width: 100vw;
+    margin-left: calc(-50vw + 50%);
+    margin-right: calc(-50vw + 50%);
+    margin-top: -1.5rem;
+}
+
+.destaque-poster {
+    width: 200px;
+    aspect-ratio: 2 / 3;
+    object-fit: cover;
+}
+
+.destaque-info {
+    min-width: 0; /* pro texto poder quebrar linha certo dentro do flex */
+}
+
+@media (min-width: 768px) {
+    .destaque-poster {
+        width: 260px;
+    }
+}
+
+/* Efeito de troca de slide: desliza pro lado E vai desaparecendo (fade)
+   ao mesmo tempo, em vez do slide seco padrão do Bootstrap. */
+.destaque-topo .carousel-item {
+    transition: transform 0.7s ease-in-out, opacity 0.7s ease-in-out;
+}
+
+.destaque-topo .carousel-item-next:not(.carousel-item-start),
+.destaque-topo .carousel-item-prev:not(.carousel-item-end) {
+    opacity: 0;
+}
+
+.destaque-topo .active.carousel-item-start,
+.destaque-topo .active.carousel-item-end {
+    opacity: 0;
 }
 
 /* Aplica o visual do Bootstrap em formulários gerados automaticamente

@@ -33,8 +33,41 @@ def _com_media(queryset):
     return queryset.annotate(media_notas=Avg("avaliacoes__nota"), qtd_avaliacoes=Count("avaliacoes"))
 
 
+LIMITE_DESTAQUES_ANO = 18  # quantos títulos aparecem no carrossel do topo
+
+
+def _destaques_do_ano():
+    """Uma ÚNICA fileira horizontal, logo abaixo do cabeçalho — junta filme,
+    série e livro do ano mais recente que já tem título cadastrado (no
+    catálogo real do site, "esse ano" nem sempre tem lançamento, então
+    usamos o último ano com conteúdo em vez do ano civil atual), do mais
+    bem avaliado pro menos avaliado. Igual à fileira de destaque do topo da
+    Netflix, só que sem precisar escolher só 1 tipo de mídia."""
+    modelos = (("filme", Filme), ("serie", Serie), ("livro", Livro))
+
+    ultimo_ano = None
+    for _, model in modelos:
+        ano = model.objects.order_by("-ano_lancamento").values_list("ano_lancamento", flat=True).first()
+        if ano and (ultimo_ano is None or ano > ultimo_ano):
+            ultimo_ano = ano
+    if ultimo_ano is None:
+        return {"ano": None, "itens": []}
+
+    itens = []
+    for tipo, model in modelos:
+        for item in model.objects.filter(ano_lancamento=ultimo_ano):
+            item.tipo = tipo
+            itens.append(item)
+
+    # Ordena todo mundo junto (filme, série e livro misturados) pela nota do
+    # público — sem nota fica por último, em vez de sumir da lista.
+    itens.sort(key=lambda i: (i.nota_publico is None, -(i.nota_publico or 0)))
+    return {"ano": ultimo_ano, "itens": itens[:LIMITE_DESTAQUES_ANO]}
+
+
 def home(request):
     contexto = {
+        "destaques_do_ano": _destaques_do_ano(),
         "filmes": _com_media(Filme.objects.all()).order_by("-ano_lancamento")[:4],
         "series": _com_media(Serie.objects.all()).order_by("-ano_lancamento")[:4],
         "livros": _com_media(Livro.objects.all()).order_by("-ano_lancamento")[:4],
