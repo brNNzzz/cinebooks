@@ -39,69 +39,78 @@ def _com_media(queryset):
 
 LIMITE_DESTAQUES_ANO = 18  # quantos títulos aparecem no carrossel do topo
 
-# Guarda quais (modelo, pk, idioma) já têm uma tradução sendo buscada agora,
-# pra não disparar várias threads fazendo a mesma tradução em paralelo.
-_TRADUZINDO_AGORA = set()
-_TRADUZINDO_AGORA_LOCK = threading.Lock()
 
+def _buscar_traducao_agora(item, tipo, idioma):
+    """Busca o título/sinopse desse item no idioma pedido e já guarda no
+    cache `traducoes`, SEM tocar nos campos `titulo`/`sinopse` originais.
+    Devolve (titulo, sinopse) traduzidos, ou None se não deu pra buscar
+    (item sem id_externo, ou a API falhou) — quem chamou usa o texto
+    original nesse caso.
 
-def _traduzir_em_segundo_plano(pk, model, tipo, idioma):
-    """Busca o título/sinopse desse item no idioma pedido e guarda no cache
-    `traducoes`, SEM tocar nos campos `titulo`/`sinopse` originais. Roda numa
-    thread separada pra não travar a página — na primeira vez que alguém vê
-    esse item nesse idioma, ainda aparece o texto original; da próxima vez
-    (ou pra outra pessoa), já aparece traduzido."""
-    chave = (model.__name__, pk, idioma)
-    with _TRADUZINDO_AGORA_LOCK:
-        if chave in _TRADUZINDO_AGORA:
-            return
-        _TRADUZINDO_AGORA.add(chave)
+    É chamada NA HORA (não em segundo plano) — assim, ao trocar de idioma,
+    a PRÓPRIA página que está carregando já aparece traduzida, sem precisar
+    recarregar de novo depois. Pra não deixar páginas com vários títulos
+    (o carrossel da home) lentas fazendo uma chamada de cada vez, use
+    _traduzir_varios pra buscar em paralelo."""
+    if not item.id_externo:
+        return None
     try:
-        item = model.objects.get(pk=pk)
-        if not item.id_externo:
-            return
         if tipo == "filme":
             info = busca_externa.detalhes_filme(item.id_externo, idioma=idioma)
         else:
             info = busca_externa.detalhes_serie(item.id_externo, idioma=idioma)
-        if not info or not info.get("titulo"):
-            return
-        cache = dict(item.traducoes or {})
-        cache[idioma] = {
-            "titulo": info.get("titulo") or item.titulo,
-            "sinopse": info.get("sinopse") or item.sinopse,
-        }
-        item.traducoes = cache
-        item.save(update_fields=["traducoes"])
-    except model.DoesNotExist:
-        pass
     except Exception:
-        logger.exception("Falha ao traduzir %s #%s pro idioma %s", tipo, pk, idioma)
-    finally:
-        connections.close_all()
-        with _TRADUZINDO_AGORA_LOCK:
-            _TRADUZINDO_AGORA.discard(chave)
+        logger.exception("Falha ao traduzir %s #%s pro idioma %s", tipo, item.pk, idioma)
+        return None
+    if not info or not info.get("titulo"):
+        return None
+    titulo = info.get("titulo") or item.titulo
+    sinopse = info.get("sinopse") or item.sinopse
+    cache = dict(item.traducoes or {})
+    cache[idioma] = {"titulo": titulo, "sinopse": sinopse}
+    item.traducoes = cache
+    item.save(update_fields=["traducoes"])
+    return titulo, sinopse
+
+
+def _traduzir_varios(itens_com_tipo, idioma_atual):
+    """Busca, EM PARALELO (várias chamadas de API ao mesmo tempo em vez de
+    uma de cada vez), a tradução de todos os itens de `itens_com_tipo` que
+    ainda não tenham uma tradução pronta pra `idioma_atual` — usado no
+    carrossel da home, que pode ter vários títulos de uma vez. Sem isso,
+    trocar pra um idioma novo com o carrossel cheio deixaria a home bem
+    lenta (uma chamada de API esperando a outra terminar)."""
+    if not idioma_atual:
+        return
+    pendentes = [
+        (item, tipo)
+        for item, tipo in itens_com_tipo
+        if tipo in ("filme", "serie")
+        and idioma_atual != item.idioma_tmdb_conteudo
+        and not (item.traducoes or {}).get(idioma_atual)
+    ]
+    if not pendentes:
+        return
+    with ThreadPoolExecutor(max_workers=6) as executor:
+        list(executor.map(lambda par: _buscar_traducao_agora(par[0], par[1], idioma_atual), pendentes))
 
 
 def _texto_no_idioma(item, tipo, idioma_atual):
     """Devolve (titulo, sinopse) pra EXIBIR pra quem está navegando em
     `idioma_atual`. Se for o mesmo idioma em que o item foi cadastrado, usa
     o texto original de sempre. Se for outro idioma e já tivermos uma
-    tradução cacheada, usa ela. Se ainda não tivermos, dispara uma busca em
-    segundo plano (sem travar a página) e por enquanto mostra o texto
-    original — assim o site nunca mistura idiomas dentro do mesmo texto, só
-    pode demorar uma visita pra tradução aparecer pronta."""
+    tradução cacheada (ver _buscar_traducao_agora/_traduzir_varios), usa
+    ela. Senão, busca na hora (só acontece se ninguém chamou
+    _traduzir_varios antes pra esse item)."""
     if not idioma_atual or idioma_atual == item.idioma_tmdb_conteudo:
         return item.titulo, item.sinopse
     traducao = (item.traducoes or {}).get(idioma_atual)
     if traducao:
         return traducao.get("titulo") or item.titulo, traducao.get("sinopse") or item.sinopse
-    if tipo in ("filme", "serie") and item.id_externo:
-        threading.Thread(
-            target=_traduzir_em_segundo_plano,
-            args=(item.pk, type(item), tipo, idioma_atual),
-            daemon=True,
-        ).start()
+    if tipo in ("filme", "serie"):
+        resultado = _buscar_traducao_agora(item, tipo, idioma_atual)
+        if resultado:
+            return resultado
     return item.titulo, item.sinopse
 
 
@@ -133,13 +142,22 @@ def _destaques_do_ano(idioma_atual=None):
     for tipo, model in modelos:
         for item in model.objects.filter(ano_lancamento=ano):
             item.tipo = tipo
-            item.titulo_exibicao, item.sinopse_exibicao = _texto_no_idioma(item, tipo, idioma_atual)
             itens.append(item)
 
     # Ordena todo mundo junto (filme, série e livro misturados) pela nota do
     # público — sem nota fica por último, em vez de sumir da lista.
     itens.sort(key=lambda i: (i.nota_publico is None, -(i.nota_publico or 0)))
-    return {"ano": ano, "itens": itens[:LIMITE_DESTAQUES_ANO]}
+    itens = itens[:LIMITE_DESTAQUES_ANO]
+
+    # Traduz em PARALELO só os itens que realmente vão aparecer (depois do
+    # corte acima) — assim trocar de idioma já mostra tudo certo na mesma
+    # troca, sem precisar recarregar de novo, e sem esperar uma chamada de
+    # API terminar pra começar a próxima.
+    _traduzir_varios([(item, item.tipo) for item in itens], idioma_atual)
+    for item in itens:
+        item.titulo_exibicao, item.sinopse_exibicao = _texto_no_idioma(item, item.tipo, idioma_atual)
+
+    return {"ano": ano, "itens": itens}
 
 
 def home(request):
@@ -246,8 +264,8 @@ def detalhe(request, tipo, pk):
         _garantir_notas_omdb(item, tipo=tipo)
 
     # Mostra título/sinopse no idioma em que a pessoa está navegando o site
-    # agora (se já tivermos essa tradução pronta) — sem nunca sobrescrever
-    # o texto original do item (ver _texto_no_idioma).
+    # agora — busca a tradução na hora se ainda não tiver uma pronta, sem
+    # nunca sobrescrever o texto original do item (ver _texto_no_idioma).
     item.titulo_exibicao, item.sinopse_exibicao = _texto_no_idioma(
         item, tipo, _idioma_tmdb_atual(request)
     )
