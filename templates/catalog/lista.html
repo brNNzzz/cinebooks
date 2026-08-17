@@ -14,7 +14,7 @@
         <select name="genero" class="form-select">
             <option value="">{% t "lista_todos_generos" %}</option>
             {% for g in generos %}
-                <option value="{{ g.id }}" {% if genero_id == g.id|stringformat:"s" %}selected{% endif %}>{{ g.nome }}</option>
+                <option value="{{ g.id }}" {% if genero_id == g.id|stringformat:"s" %}selected{% endif %}>{{ g.nome|traduzir_genero:IDIOMA_ATUAL }}</option>
             {% endfor %}
         </select>
     </div>

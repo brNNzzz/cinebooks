@@ -43,7 +43,7 @@
                 {% if item.numero_paginas %}<li><strong>{% t "detalhe_paginas" %}:</strong> {{ item.numero_paginas }}</li>{% endif %}
             {% endif %}
             {% if item.generos.all %}
-                <li><strong>{% t "detalhe_generos" %}:</strong> {% for g in item.generos.all %}{{ g.nome }}{% if not forloop.last %}, {% endif %}{% endfor %}</li>
+                <li><strong>{% t "detalhe_generos" %}:</strong> {% for g in item.generos.all %}{{ g.nome|traduzir_genero:IDIOMA_ATUAL }}{% if not forloop.last %}, {% endif %}{% endfor %}</li>
             {% endif %}
         </ul>
 
