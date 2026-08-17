@@ -12,6 +12,7 @@ from django.db import connections
 from django.db.models import Avg, Count, Q
 from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
+from django.utils import timezone
 from django.views.decorators.http import require_POST
 
 from . import busca_externa
@@ -38,31 +39,38 @@ LIMITE_DESTAQUES_ANO = 18  # quantos títulos aparecem no carrossel do topo
 
 def _destaques_do_ano():
     """Uma ÚNICA fileira horizontal, logo abaixo do cabeçalho — junta filme,
-    série e livro do ano mais recente que já tem título cadastrado (no
-    catálogo real do site, "esse ano" nem sempre tem lançamento, então
-    usamos o último ano com conteúdo em vez do ano civil atual), do mais
+    série e livro do ano ATUAL (o ano civil de verdade, tipo 2026), do mais
     bem avaliado pro menos avaliado. Igual à fileira de destaque do topo da
-    Netflix, só que sem precisar escolher só 1 tipo de mídia."""
-    modelos = (("filme", Filme), ("serie", Serie), ("livro", Livro))
+    Netflix, só que sem precisar escolher só 1 tipo de mídia.
 
-    ultimo_ano = None
+    Se não tiver nenhum título lançado esse ano ainda, usa o ano mais
+    recente que JÁ PASSOU — nunca um ano no futuro (tipo "Avatar 5 (2031)",
+    um lançamento anunciado que ainda nem saiu; isso bagunçaria o
+    "destaque do ano" e, como só teria 1 título futuro cadastrado, o
+    carrossel nem teria pra onde trocar de slide)."""
+    modelos = (("filme", Filme), ("serie", Serie), ("livro", Livro))
+    ano_atual = timezone.now().year
+
+    anos_ja_lancados = set()
     for _, model in modelos:
-        ano = model.objects.order_by("-ano_lancamento").values_list("ano_lancamento", flat=True).first()
-        if ano and (ultimo_ano is None or ano > ultimo_ano):
-            ultimo_ano = ano
-    if ultimo_ano is None:
+        anos = model.objects.filter(ano_lancamento__lte=ano_atual).values_list(
+            "ano_lancamento", flat=True
+        )
+        anos_ja_lancados.update(anos)
+    if not anos_ja_lancados:
         return {"ano": None, "itens": []}
+    ano = ano_atual if ano_atual in anos_ja_lancados else max(anos_ja_lancados)
 
     itens = []
     for tipo, model in modelos:
-        for item in model.objects.filter(ano_lancamento=ultimo_ano):
+        for item in model.objects.filter(ano_lancamento=ano):
             item.tipo = tipo
             itens.append(item)
 
     # Ordena todo mundo junto (filme, série e livro misturados) pela nota do
     # público — sem nota fica por último, em vez de sumir da lista.
     itens.sort(key=lambda i: (i.nota_publico is None, -(i.nota_publico or 0)))
-    return {"ano": ultimo_ano, "itens": itens[:LIMITE_DESTAQUES_ANO]}
+    return {"ano": ano, "itens": itens[:LIMITE_DESTAQUES_ANO]}
 
 
 def home(request):
