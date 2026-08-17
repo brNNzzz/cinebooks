@@ -1,36 +1,35 @@
 {% extends "base.html" %}
+{% load i18n_custom %}
 
-{% block titulo %}Adicionar título — CineBooks{% endblock %}
+{% block titulo %}{% t "importar_titulo_pagina" %} — CineBooks{% endblock %}
 
 {% block conteudo %}
-<h1 class="h3 mb-4">Buscar e adicionar título</h1>
+<h1 class="h3 mb-4">{% t "importar_h1" %}</h1>
 
 {% if not tmdb_configurado %}
 <div class="alert alert-warning">
-    A busca de <strong>filmes e séries</strong> precisa de uma chave gratuita do TMDB
-    configurada (variável de ambiente <code>TMDB_API_KEY</code>) — veja o README do
-    projeto. A busca de <strong>livros</strong> já funciona normalmente, sem chave.
+    {% autoescape off %}{% t "importar_aviso_tmdb" %}{% endautoescape %}
 </div>
 {% endif %}
 
 <form method="get" class="row g-2 mb-4">
     <div class="col-sm-3 col-md-2">
         <select name="tipo" class="form-select">
-            <option value="filme" {% if tipo == "filme" %}selected{% endif %}>Filme</option>
-            <option value="serie" {% if tipo == "serie" %}selected{% endif %}>Série</option>
-            <option value="livro" {% if tipo == "livro" %}selected{% endif %}>Livro</option>
+            <option value="filme" {% if tipo == "filme" %}selected{% endif %}>{% t "tipo_filme" %}</option>
+            <option value="serie" {% if tipo == "serie" %}selected{% endif %}>{% t "tipo_serie" %}</option>
+            <option value="livro" {% if tipo == "livro" %}selected{% endif %}>{% t "tipo_livro" %}</option>
         </select>
     </div>
     <div class="col-sm-7 col-md-8">
-        <input type="text" name="q" class="form-control" placeholder="Digite o título para buscar..." value="{{ query }}" autofocus>
+        <input type="text" name="q" class="form-control" placeholder="{% t 'importar_buscar_placeholder' %}" value="{{ query }}" autofocus>
     </div>
     <div class="col-sm-2">
-        <button type="submit" class="btn btn-primary w-100">Buscar</button>
+        <button type="submit" class="btn btn-primary w-100">{% t "importar_buscar_botao" %}</button>
     </div>
 </form>
 
 {% if query and not resultados %}
-    <p class="text-muted">Nenhum resultado encontrado para "{{ query }}".</p>
+    <p class="text-muted">{{ mensagem_nenhum_resultado }}</p>
 {% endif %}
 
 <div class="row">
@@ -38,7 +37,7 @@
     <div class="col-6 col-md-4 col-lg-3 mb-4">
         <div class="card h-100 shadow-sm">
             <img src="{{ r.poster_url|default:'https://placehold.co/400x600/1f2937/ffffff?text=Sem+imagem' }}"
-                 class="poster card-img-top" alt="Capa de {{ r.titulo }}">
+                 class="poster card-img-top" alt="{{ r.titulo }}">
             <div class="card-body d-flex flex-column">
                 <h6 class="card-title mb-1">{{ r.titulo }}</h6>
                 <p class="card-text text-muted small mb-2">
@@ -54,17 +53,17 @@
                     <input type="hidden" name="editora" value="{{ r.editora }}">
                     <input type="hidden" name="numero_paginas" value="{{ r.numero_paginas|default:'' }}">
                     <input type="hidden" name="poster_url" value="{{ r.poster_url }}">
-                    <button type="submit" class="btn btn-sm btn-success w-100">+ Adicionar ao catálogo</button>
+                    <button type="submit" class="btn btn-sm btn-success w-100">{% t "importar_adicionar_botao" %}</button>
                 </form>
                 {% elif tipo == "filme" %}
                 <form method="post" action="{% url 'importar_adicionar_filme' r.id %}" class="mt-auto">
                     {% csrf_token %}
-                    <button type="submit" class="btn btn-sm btn-success w-100">+ Adicionar ao catálogo</button>
+                    <button type="submit" class="btn btn-sm btn-success w-100">{% t "importar_adicionar_botao" %}</button>
                 </form>
                 {% elif tipo == "serie" %}
                 <form method="post" action="{% url 'importar_adicionar_serie' r.id %}" class="mt-auto">
                     {% csrf_token %}
-                    <button type="submit" class="btn btn-sm btn-success w-100">+ Adicionar ao catálogo</button>
+                    <button type="submit" class="btn btn-sm btn-success w-100">{% t "importar_adicionar_botao" %}</button>
                 </form>
                 {% endif %}
             </div>

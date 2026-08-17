@@ -17,16 +17,19 @@ from django.views.decorators.http import require_POST
 
 from . import busca_externa
 from .forms import AvaliacaoForm, RegistroForm
-from .i18n import IDIOMA_PADRAO, IDIOMAS
+from .i18n import IDIOMA_PADRAO, IDIOMAS, traduzir
 from .models import Avaliacao, Filme, Genero, Livro, Pessoa, Serie
 
 logger = logging.getLogger(__name__)
 
 # Mapa usado nas URLs para saber a qual modelo/rótulo cada "tipo" corresponde.
+# "rotulo_chave"/"rotulo_plural_chave" são chaves do dicionário de tradução
+# (catalog/i18n.py), não o texto pronto — assim o rótulo muda de idioma
+# junto com o resto do site (ver traduzir() nos usos abaixo).
 TIPOS = {
-    "filme": {"model": Filme, "rotulo": "Filme", "rotulo_plural": "Filmes"},
-    "serie": {"model": Serie, "rotulo": "Série", "rotulo_plural": "Séries"},
-    "livro": {"model": Livro, "rotulo": "Livro", "rotulo_plural": "Livros"},
+    "filme": {"model": Filme, "rotulo_chave": "tipo_filme", "rotulo_plural_chave": "nav_filmes"},
+    "serie": {"model": Serie, "rotulo_chave": "tipo_serie", "rotulo_plural_chave": "nav_series"},
+    "livro": {"model": Livro, "rotulo_chave": "tipo_livro", "rotulo_plural_chave": "nav_livros"},
 }
 
 
@@ -165,7 +168,7 @@ def lista(request, tipo):
 
     contexto = {
         "tipo": tipo,
-        "rotulo_plural": info["rotulo_plural"],
+        "rotulo_plural": traduzir(info["rotulo_plural_chave"], _idioma_atual(request)),
         "itens": queryset,
         "generos": Genero.objects.all(),
         "termo": termo,
@@ -256,11 +259,11 @@ def detalhe(request, tipo, pk):
             usuario=request.user, content_type=content_type, object_id=item.pk
         ).first()
 
-    form = AvaliacaoForm(instance=minha_avaliacao)
+    form = AvaliacaoForm(instance=minha_avaliacao, idioma=_idioma_atual(request))
 
     contexto = {
         "tipo": tipo,
-        "rotulo": info["rotulo"],
+        "rotulo": traduzir(info["rotulo_chave"], _idioma_atual(request)),
         "item": item,
         "avaliacoes": item.avaliacoes.select_related("usuario").all(),
         "media": item.media_avaliacoes(),
@@ -285,16 +288,17 @@ def avaliar(request, tipo, pk):
         usuario=request.user, content_type=content_type, object_id=item.pk
     ).first()
 
-    form = AvaliacaoForm(request.POST, instance=instancia)
+    idioma_atual = _idioma_atual(request)
+    form = AvaliacaoForm(request.POST, instance=instancia, idioma=idioma_atual)
     if form.is_valid():
         avaliacao = form.save(commit=False)
         avaliacao.usuario = request.user
         avaliacao.content_type = content_type
         avaliacao.object_id = item.pk
         avaliacao.save()
-        messages.success(request, "Sua avaliação foi salva. Obrigado!")
+        messages.success(request, traduzir("avaliacao_salva", idioma_atual))
     else:
-        messages.error(request, "Não foi possível salvar a avaliação. Verifique a nota.")
+        messages.error(request, traduzir("avaliacao_erro", idioma_atual))
 
     return redirect("detalhe", tipo=tipo, pk=pk)
 
@@ -799,11 +803,18 @@ def importar_buscar(request):
         elif tipo == "livro":
             resultados = busca_externa.buscar_livros(query)
 
+    mensagem_nenhum_resultado = ""
+    if query and not resultados:
+        mensagem_nenhum_resultado = traduzir(
+            "importar_nenhum_resultado", _idioma_atual(request)
+        ).format(query=query)
+
     contexto = {
         "tipo": tipo,
         "query": query,
         "resultados": resultados,
         "tmdb_configurado": busca_externa.tmdb_configurado(),
+        "mensagem_nenhum_resultado": mensagem_nenhum_resultado,
     }
     return render(request, "catalog/importar.html", contexto)
 
@@ -811,28 +822,24 @@ def importar_buscar(request):
 @staff_member_required
 @require_POST
 def importar_adicionar_filme(request, tmdb_id):
+    idioma_atual = _idioma_atual(request)
     obj = _criar_filme_do_tmdb(tmdb_id, idioma_tmdb=_idioma_tmdb_atual(request))
     if not obj:
-        messages.error(
-            request,
-            "Não foi possível importar esse filme agora (falha ao buscar no TMDB). Tente de novo em instantes.",
-        )
+        messages.error(request, traduzir("importar_erro_tmdb", idioma_atual))
         return redirect("importar_buscar")
-    messages.success(request, f'"{obj.titulo}" está no catálogo!')
+    messages.success(request, traduzir("importar_adicionado", idioma_atual).format(titulo=obj.titulo))
     return redirect("detalhe", tipo="filme", pk=obj.pk)
 
 
 @staff_member_required
 @require_POST
 def importar_adicionar_serie(request, tmdb_id):
+    idioma_atual = _idioma_atual(request)
     obj = _criar_serie_do_tmdb(tmdb_id, idioma_tmdb=_idioma_tmdb_atual(request))
     if not obj:
-        messages.error(
-            request,
-            "Não foi possível importar essa série agora (falha ao buscar no TMDB). Tente de novo em instantes.",
-        )
+        messages.error(request, traduzir("importar_erro_tmdb", idioma_atual))
         return redirect("importar_buscar")
-    messages.success(request, f'"{obj.titulo}" está no catálogo!')
+    messages.success(request, traduzir("importar_adicionado", idioma_atual).format(titulo=obj.titulo))
     return redirect("detalhe", tipo="serie", pk=obj.pk)
 
 
@@ -853,24 +860,28 @@ def importar_adicionar_livro(request, olid):
     else:
         resultado_busca["numero_paginas"] = None
 
+    idioma_atual = _idioma_atual(request)
     obj = _criar_livro_do_openlibrary(resultado_busca)
     if not obj:
-        messages.error(request, "Não foi possível importar esse livro (dados incompletos).")
+        messages.error(request, traduzir("importar_erro_dados_incompletos", idioma_atual))
         return redirect("importar_buscar")
-    messages.success(request, f'"{obj.titulo}" está no catálogo!')
+    messages.success(request, traduzir("importar_adicionado", idioma_atual).format(titulo=obj.titulo))
     return redirect("detalhe", tipo="livro", pk=obj.pk)
 
 
 def registrar(request):
+    idioma_atual = _idioma_atual(request)
     if request.method == "POST":
-        form = RegistroForm(request.POST)
+        form = RegistroForm(request.POST, idioma=idioma_atual)
         if form.is_valid():
             usuario = form.save()
             login(request, usuario)
-            messages.success(request, f"Bem-vindo(a), {usuario.username}!")
+            messages.success(
+                request, traduzir("registrar_bemvindo", idioma_atual).format(usuario=usuario.username)
+            )
             return redirect("home")
     else:
-        form = RegistroForm()
+        form = RegistroForm(idioma=idioma_atual)
 
     return render(request, "registration/registrar.html", {"form": form})
 
@@ -941,7 +952,7 @@ def excluir_avaliacao(request, avaliacao_id):
     outra pessoa, dá 404 em vez de deixar apagar)."""
     avaliacao = get_object_or_404(Avaliacao, pk=avaliacao_id, usuario=request.user)
     avaliacao.delete()
-    messages.success(request, "Avaliação removida.")
+    messages.success(request, traduzir("avaliacao_removida", _idioma_atual(request)))
     return redirect("perfil")
 
 

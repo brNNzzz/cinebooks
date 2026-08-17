@@ -32,15 +32,15 @@
 
         <ul class="list-unstyled text-muted">
             {% if tipo == "filme" %}
-                {% if item.diretor %}<li><strong>Direção:</strong> {{ item.diretor }}</li>{% endif %}
-                {% if item.duracao_minutos %}<li><strong>Duração:</strong> {{ item.duracao_minutos }} min</li>{% endif %}
+                {% if item.diretor %}<li><strong>{% t "detalhe_direcao" %}:</strong> {{ item.diretor }}</li>{% endif %}
+                {% if item.duracao_minutos %}<li><strong>{% t "detalhe_duracao" %}:</strong> {{ item.duracao_minutos }} {% t "detalhe_min_abrev" %}</li>{% endif %}
             {% elif tipo == "serie" %}
-                {% if item.criador %}<li><strong>Criação:</strong> {{ item.criador }}</li>{% endif %}
-                {% if item.numero_temporadas %}<li><strong>Temporadas:</strong> {{ item.numero_temporadas }}</li>{% endif %}
+                {% if item.criador %}<li><strong>{% t "detalhe_criacao" %}:</strong> {{ item.criador }}</li>{% endif %}
+                {% if item.numero_temporadas %}<li><strong>{% t "detalhe_temporadas" %}:</strong> {{ item.numero_temporadas }}</li>{% endif %}
             {% elif tipo == "livro" %}
                 {% if item.autor %}<li><strong>{% t "detalhe_autor" %}:</strong> {{ item.autor }}</li>{% endif %}
-                {% if item.editora %}<li><strong>Editora:</strong> {{ item.editora }}</li>{% endif %}
-                {% if item.numero_paginas %}<li><strong>Páginas:</strong> {{ item.numero_paginas }}</li>{% endif %}
+                {% if item.editora %}<li><strong>{% t "detalhe_editora" %}:</strong> {{ item.editora }}</li>{% endif %}
+                {% if item.numero_paginas %}<li><strong>{% t "detalhe_paginas" %}:</strong> {{ item.numero_paginas }}</li>{% endif %}
             {% endif %}
             {% if item.generos.all %}
                 <li><strong>{% t "detalhe_generos" %}:</strong> {% for g in item.generos.all %}{{ g.nome }}{% if not forloop.last %}, {% endif %}{% endfor %}</li>

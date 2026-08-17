@@ -75,6 +75,9 @@ MIDDLEWARE = [
     # PythonAnywhere) não tem um jeito próprio de servir estáticos.
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
+    # Ativa a tradução nativa do Django (formulário de criar conta, etc.) no
+    # idioma escolhido no site — ver catalog/middleware.py.
+    "catalog.middleware.IdiomaDjangoMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
