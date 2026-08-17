@@ -65,9 +65,21 @@ def _buscar_traducao_agora(item, tipo, idioma):
     if not info or not info.get("titulo"):
         return None
     titulo = info.get("titulo") or item.titulo
-    sinopse = info.get("sinopse") or item.sinopse
+    # IMPORTANTE: aqui NÃO cai pro item.sinopse original se a API não tiver
+    # sinopse nesse idioma — isso é o que causava sinopse aparecer numa
+    # língua diferente da que a pessoa escolheu (ex.: título em francês,
+    # que é aceitável pois nomes próprios geralmente não são traduzidos
+    # mesmo em serviços como Netflix, mas sinopse em inglês quando o site
+    # estava em português). Se o TMDB não tem sinopse traduzida pra esse
+    # idioma, fica em branco e o template mostra "sem sinopse disponível"
+    # em vez de mostrar um parágrafo inteiro na língua errada.
+    sinopse = info.get("sinopse") or ""
     cache = dict(item.traducoes or {})
-    cache[idioma] = {"titulo": titulo, "sinopse": sinopse}
+    # "v": 2 marca esse formato como já corrigido (sinopse em branco em vez
+    # de reaproveitar texto no idioma errado) — usado pelo comando
+    # limpar_cache_traducoes pra saber quais entradas antigas (sem essa
+    # marca) precisam ser descartadas e buscadas de novo.
+    cache[idioma] = {"titulo": titulo, "sinopse": sinopse, "v": 2}
     item.traducoes = cache
     item.save(update_fields=["traducoes"])
     return titulo, sinopse
@@ -106,7 +118,11 @@ def _texto_no_idioma(item, tipo, idioma_atual):
         return item.titulo, item.sinopse
     traducao = (item.traducoes or {}).get(idioma_atual)
     if traducao:
-        return traducao.get("titulo") or item.titulo, traducao.get("sinopse") or item.sinopse
+        # Mesmo motivo do comentário em _buscar_traducao_agora: sinopse
+        # cacheada como "" significa "TMDB não tem tradução pra esse
+        # idioma", então mostra em branco em vez de voltar pro texto
+        # original (que estaria numa língua diferente da escolhida).
+        return traducao.get("titulo") or item.titulo, traducao.get("sinopse", "")
     if tipo in ("filme", "serie"):
         resultado = _buscar_traducao_agora(item, tipo, idioma_atual)
         if resultado:

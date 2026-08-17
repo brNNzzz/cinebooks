@@ -18,6 +18,11 @@ python manage.py seed_data
 # travar o deploy — por isso o "|| true" no final.
 python manage.py buscar_capas || true
 
+# Descarta cache de tradução salvo com o bug antigo (sinopse aparecendo
+# numa língua diferente da escolhida no site). Só mexe em quem ainda está
+# desatualizado, então não desperdiça tempo nos deploys seguintes.
+python manage.py limpar_cache_traducoes || true
+
 # Cria o usuário administrador automaticamente, usando as variáveis de
 # ambiente DJANGO_SUPERUSER_USERNAME / _EMAIL / _PASSWORD, se elas estiverem
 # configuradas no painel do Render. Se o usuário já existir, o comando dá
