@@ -26,6 +26,11 @@ Arquivos:
                                   sinopse noutra (ver catalog/views.py,
                                   funções _texto_no_idioma/_buscar_traducao_
                                   agora, e o comando limpar_cache_traducoes).
+- test_home.py                 → página inicial, em especial a correção do
+                                  bug em que um título com ano de
+                                  lançamento no FUTURO (ex: uma continuação
+                                  só anunciada, tipo "Avatar 5") aparecia
+                                  nas fileiras "recentes" da home.
 
 Como rodar:
     python manage.py test                        → roda tudo

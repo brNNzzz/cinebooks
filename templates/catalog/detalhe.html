@@ -99,7 +99,9 @@
 
 <h2 class="h4 mb-3">{% t "detalhe_avaliacoes_titulo" %}</h2>
 
-{% if user.is_authenticated %}
+{% if not ja_lancado %}
+<p class="text-muted">{% t "detalhe_ainda_nao_lancado" %}</p>
+{% elif user.is_authenticated %}
 <div class="card mb-4">
     <div class="card-body">
         <h3 class="h6">{% if minha_avaliacao %}{% t "detalhe_editar_avaliacao" %}{% else %}{% t "detalhe_deixar_avaliacao" %}{% endif %}</h3>

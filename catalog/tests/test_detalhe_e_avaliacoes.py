@@ -17,6 +17,7 @@ etapa de vez.
 """
 
 from django.test import Client, TestCase
+from django.utils import timezone
 
 from catalog.models import Avaliacao
 from catalog.tests.fabricas import criar_filme, criar_livro, criar_serie, criar_usuario
@@ -111,6 +112,61 @@ class AvaliarTest(TestCase):
         self.assertEqual(Avaliacao.objects.count(), 0)
         mensagens = [str(m) for m in resposta.context["messages"]]
         self.assertTrue(any("erro" in m.lower() or "inválid" in m.lower() for m in mensagens) or mensagens)
+
+
+class AvaliarTituloFuturoTest(TestCase):
+    """Regra pedida pelo grupo: só dá pra avaliar títulos que JÁ foram
+    lançados (ano_lancamento até o ano atual) — não faz sentido dar nota
+    pra uma continuação anunciada que ainda nem saiu. Ver o mesmo cuidado
+    em catalog/tests/test_home.py (títulos futuros também não aparecem nas
+    fileiras "recentes" da home)."""
+
+    def setUp(self):
+        self.client = Client()
+        self.ano_atual = timezone.now().year
+        self.filme_futuro = criar_filme(
+            titulo="Avatar 5", ano=self.ano_atual + 8, dados_completos=True
+        )
+        self.usuario = criar_usuario()
+        self.client.login(username=self.usuario.username, password="senha-forte-123")
+
+    def test_pagina_de_detalhe_nao_mostra_o_formulario_de_avaliacao(self):
+        resposta = self.client.get(f"/filme/{self.filme_futuro.pk}/")
+        self.assertFalse(resposta.context["ja_lancado"])
+        # Sem o campo de nota (renderizado pelo <select name="nota">) — se o
+        # formulário estivesse visível, esse texto apareceria no HTML.
+        self.assertNotContains(resposta, 'name="nota"')
+
+    def test_pagina_de_detalhe_mostra_mensagem_no_lugar_do_formulario(self):
+        resposta = self.client.get(f"/filme/{self.filme_futuro.pk}/")
+        self.assertContains(
+            resposta, "Esse título ainda não foi lançado — você poderá avaliar assim que ele sair."
+        )
+
+    def test_enviar_avaliacao_direto_por_post_e_bloqueado_mesmo_assim(self):
+        # A tela já esconde o formulário (teste acima), mas isso sozinho não
+        # PROTEGE nada — é só uma questão de interface. Esse teste manda o
+        # POST direto pra URL de avaliar, contornando a tela por completo
+        # (como um bot ou alguém mexendo no DevTools faria), pra confirmar
+        # que a view também recusa, e não só o template.
+        resposta = self.client.post(
+            f"/filme/{self.filme_futuro.pk}/avaliar/",
+            {"nota": 5, "comentario": "Não deveria conseguir avaliar isso"},
+        )
+        self.assertRedirects(resposta, f"/filme/{self.filme_futuro.pk}/")
+        self.assertEqual(Avaliacao.objects.count(), 0)
+
+    def test_titulo_lancado_no_ano_atual_pode_ser_avaliado_normalmente(self):
+        # Não pode "passar do ponto" na correção: um lançamento DESTE ano
+        # (não do futuro) precisa continuar avaliável normalmente.
+        filme_deste_ano = criar_filme(
+            titulo="Lançamento Deste Ano", ano=self.ano_atual, dados_completos=True
+        )
+        resposta = self.client.post(
+            f"/filme/{filme_deste_ano.pk}/avaliar/", {"nota": 4, "comentario": "Gostei"}
+        )
+        self.assertRedirects(resposta, f"/filme/{filme_deste_ano.pk}/")
+        self.assertEqual(Avaliacao.objects.filter(usuario=self.usuario).count(), 1)
 
 
 class ExcluirAvaliacaoTest(TestCase):

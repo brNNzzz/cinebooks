@@ -178,11 +178,21 @@ def _destaques_do_ano(idioma_atual=None):
 
 
 def home(request):
+    # Mesmo cuidado do _destaques_do_ano (ver comentário lá): sem esse
+    # filtro, um título anunciado mas que ainda nem lançou (ex: uma
+    # continuação cadastrada com "ano_lancamento" no futuro, tipo "Avatar 5
+    # (2034)") aparecia no topo de "Filmes/Séries/Livros recentes" — essas
+    # 3 fileiras aqui embaixo ordenam por ano mais recente PRIMEIRO, então
+    # um ano no futuro sempre ganhava de tudo que já foi lançado de
+    # verdade, mesmo esse título não existindo ainda. Restringindo a
+    # `ano_lancamento__lte=ano_atual`, só entra na lista quem já lançou (ou
+    # lança até o fim do ano civil atual).
+    ano_atual = timezone.now().year
     contexto = {
         "destaques_do_ano": _destaques_do_ano(_idioma_tmdb_atual(request)),
-        "filmes": _com_media(Filme.objects.all()).order_by("-ano_lancamento")[:4],
-        "series": _com_media(Serie.objects.all()).order_by("-ano_lancamento")[:4],
-        "livros": _com_media(Livro.objects.all()).order_by("-ano_lancamento")[:4],
+        "filmes": _com_media(Filme.objects.filter(ano_lancamento__lte=ano_atual)).order_by("-ano_lancamento")[:4],
+        "series": _com_media(Serie.objects.filter(ano_lancamento__lte=ano_atual)).order_by("-ano_lancamento")[:4],
+        "livros": _com_media(Livro.objects.filter(ano_lancamento__lte=ano_atual)).order_by("-ano_lancamento")[:4],
     }
     return render(request, "catalog/home.html", contexto)
 
@@ -376,6 +386,14 @@ def detalhe(request, tipo, pk):
         "form": form,
         "minha_avaliacao": minha_avaliacao,
         "na_watchlist": na_watchlist,
+        # Controla se o formulário de avaliação aparece ou não (ver
+        # templates/catalog/detalhe.html) — não faz sentido deixar avaliar
+        # um título que ainda nem foi lançado (ex: uma continuação só
+        # anunciada, com ano de lançamento no futuro). A view `avaliar`
+        # também confere isso de novo antes de salvar, então mesmo que
+        # alguém envie o formulário contornando essa checagem visual, a
+        # avaliação não é salva (ver comentário lá).
+        "ja_lancado": item.ano_lancamento <= timezone.now().year,
     }
     return render(request, "catalog/detalhe.html", contexto)
 
@@ -421,11 +439,22 @@ def avaliar(request, tipo, pk):
     item = get_object_or_404(info["model"], pk=pk)
     content_type = ContentType.objects.get_for_model(info["model"])
 
+    idioma_atual = _idioma_atual(request)
+
+    # Não dá pra avaliar um título que ainda nem foi lançado (ex: uma
+    # continuação anunciada, cadastrada com ano de lançamento no futuro —
+    # ver também o mesmo cuidado em views.home). O formulário já fica
+    # escondido nesse caso (ver templates/catalog/detalhe.html), mas essa
+    # checagem aqui é o que realmente IMPEDE, caso alguém envie o POST
+    # direto (contornando a interface).
+    if item.ano_lancamento > timezone.now().year:
+        messages.error(request, traduzir("avaliacao_erro_nao_lancado", idioma_atual))
+        return redirect("detalhe", tipo=tipo, pk=pk)
+
     instancia = Avaliacao.objects.filter(
         usuario=request.user, content_type=content_type, object_id=item.pk
     ).first()
 
-    idioma_atual = _idioma_atual(request)
     form = AvaliacaoForm(request.POST, instance=instancia, idioma=idioma_atual)
     if form.is_valid():
         avaliacao = form.save(commit=False)
