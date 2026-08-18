@@ -37,6 +37,12 @@ python manage.py limpar_cache_traducoes || true
 # "|| true"); já preenchidos, não busca de novo.
 python manage.py buscar_datas_lancamento || true
 
+# Atualiza onde assistir (streaming/aluguel/compra) de filmes/séries já
+# cadastrados — ao contrário dos comandos acima, roda de novo TODA VEZ
+# (a disponibilidade num serviço de streaming muda com o tempo, então não
+# basta buscar uma vez só). Sem TMDB_API_KEY, não faz nada e segue o deploy.
+python manage.py atualizar_onde_assistir || true
+
 # Cria o usuário administrador automaticamente, usando as variáveis de
 # ambiente DJANGO_SUPERUSER_USERNAME / _EMAIL / _PASSWORD, se elas estiverem
 # configuradas no painel do Render. Se o usuário já existir, o comando dá

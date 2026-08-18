@@ -213,12 +213,63 @@ def _extrair_elenco(dados):
     return [p for p in pessoas if p["nome"]]
 
 
+# Região usada pra ler os provedores de streaming/aluguel/compra — o TMDB
+# devolve isso já separado por país (chave "BR", "US", etc.), porque a
+# disponibilidade muda de região pra região. Como o projeto é em português
+# e hospedado no Brasil, fixamos "BR"; não é o mesmo campo que o idioma da
+# página (dá pra estar navegando o site em inglês e ainda ver os serviços
+# disponíveis no Brasil).
+REGIAO_ONDE_ASSISTIR = "BR"
+
+
+def _extrair_provedores(lista_bruta):
+    """Converte a lista bruta de provedores do TMDB (each: provider_name,
+    logo_path...) num formato mais simples pro template usar."""
+    provedores = []
+    for provedor in lista_bruta or []:
+        logo_path = provedor.get("logo_path")
+        provedores.append(
+            {
+                "nome": provedor.get("provider_name", ""),
+                "logo_url": f"{TMDB_IMAGE_BASE_URL}{logo_path}" if logo_path else "",
+            }
+        )
+    return [p for p in provedores if p["nome"]]
+
+
+def _extrair_onde_assistir(dados):
+    """Lê o bloco "watch/providers" (vindo de append_to_response na mesma
+    chamada de detalhes, sem gastar requisição extra) e devolve um dict com
+    link + as 3 categorias (streaming por assinatura, aluguel, compra) pra
+    região do Brasil. Devolve um dict vazio se o título não tiver nenhuma
+    dessas informações (comum pra títulos muito novos ou pouco conhecidos)
+    — o template simplesmente não mostra a seção nesse caso.
+
+    Fonte dos dados: JustWatch (via TMDB) — por isso sempre exibimos a
+    atribuição "dados fornecidos por JustWatch" junto, como os termos de uso
+    do TMDB pedem."""
+    resultados = ((dados.get("watch/providers") or {}).get("results") or {}).get(
+        REGIAO_ONDE_ASSISTIR
+    ) or {}
+    onde_assistir = {
+        "link": resultados.get("link", ""),
+        "streaming": _extrair_provedores(resultados.get("flatrate")),
+        "aluguel": _extrair_provedores(resultados.get("rent")),
+        "compra": _extrair_provedores(resultados.get("buy")),
+    }
+    if not (onde_assistir["streaming"] or onde_assistir["aluguel"] or onde_assistir["compra"]):
+        return {}
+    return onde_assistir
+
+
 def detalhes_filme(tmdb_id, idioma=IDIOMA_TMDB_PADRAO):
     """Devolve um dict com os dados completos do filme (inclusive elenco),
     ou None se a busca falhar."""
     try:
         dados = _tmdb_get(
-            f"/movie/{tmdb_id}", {"append_to_response": "credits,external_ids"}, idioma=idioma
+            f"/movie/{tmdb_id}",
+            {"append_to_response": "credits,external_ids,watch/providers"},
+            idioma=idioma,
         )
     except (requests.RequestException, ValueError) as erro:
         logger.warning("Falha ao buscar detalhes do filme %r no TMDB: %s", tmdb_id, erro)
@@ -248,6 +299,9 @@ def detalhes_filme(tmdb_id, idioma=IDIOMA_TMDB_PADRAO):
         # vez de por texto do título, que falha quando o título está
         # traduzido pro idioma do site).
         "imdb_id": (dados.get("external_ids") or {}).get("imdb_id") or "",
+        # Onde assistir (streaming/aluguel/compra) — também vem de graça
+        # nessa mesma chamada (append_to_response=watch/providers).
+        "onde_assistir": _extrair_onde_assistir(dados),
     }
 
 
@@ -256,7 +310,9 @@ def detalhes_serie(tmdb_id, idioma=IDIOMA_TMDB_PADRAO):
     ou None se a busca falhar."""
     try:
         dados = _tmdb_get(
-            f"/tv/{tmdb_id}", {"append_to_response": "credits,external_ids"}, idioma=idioma
+            f"/tv/{tmdb_id}",
+            {"append_to_response": "credits,external_ids,watch/providers"},
+            idioma=idioma,
         )
     except (requests.RequestException, ValueError) as erro:
         logger.warning("Falha ao buscar detalhes da série %r no TMDB: %s", tmdb_id, erro)
@@ -277,6 +333,7 @@ def detalhes_serie(tmdb_id, idioma=IDIOMA_TMDB_PADRAO):
         "generos": [g["name"].title() for g in dados.get("genres") or []],
         "elenco": _extrair_elenco(dados),
         "imdb_id": (dados.get("external_ids") or {}).get("imdb_id") or "",
+        "onde_assistir": _extrair_onde_assistir(dados),
     }
 
 
@@ -286,26 +343,42 @@ def omdb_configurado():
 
 def buscar_notas_omdb(titulo, ano, imdb_id=""):
     """Busca no OMDb (omdbapi.com) a nota do público (IMDb), a nota da
-    crítica (Metacritic) e a % do Rotten Tomatoes de um filme ou série.
-    Devolve um dict {"nota_publico": float|None, "nota_critica": float|None,
-    "nota_rotten_tomatoes": int|None} — nunca lança erro, só devolve tudo
-    None se algo falhar ou não tiver a chave configurada.
+    crítica (Metacritic), a % do Rotten Tomatoes e uma sinopse mais longa
+    ("plot=full", bem mais detalhada que o resumo padrão) de um filme ou
+    série. Devolve um dict {"nota_publico": float|None, "nota_critica":
+    float|None, "nota_rotten_tomatoes": int|None, "sinopse_omdb": str} —
+    nunca lança erro, só devolve tudo vazio se algo falhar ou não tiver a
+    chave configurada.
 
     Sempre que tivermos o `imdb_id` (ex: "tt1160419", que vem de graça junto
     com os detalhes do TMDB), buscamos por ELE em vez de por título+ano —
     é uma busca exata, então funciona mesmo com o título traduzido pro
     idioma do site (o OMDb é uma base majoritariamente em inglês, então
     buscar por texto o título em português/espanhol/etc. costuma falhar e
-    devolver nada, nem nota do público nem da crítica)."""
-    vazio = {"nota_publico": None, "nota_critica": None, "nota_rotten_tomatoes": None}
+    devolver nada, nem nota do público nem da crítica).
+
+    IMPORTANTE sobre `sinopse_omdb`: o OMDb só devolve texto em INGLÊS, não
+    tem opção de idioma. Por isso quem usa esse retorno (ver
+    `_garantir_notas_omdb` em views.py) só aplica esse texto em títulos cujo
+    conteúdo original já é em inglês, ou guarda como uma tradução pronta pro
+    inglês — nunca substitui a sinopse de um título cadastrado em outro
+    idioma, senão a página ficaria com um parágrafo em inglês no meio do
+    site em português (o mesmo cuidado que já existe no cache de tradução,
+    ver `_buscar_traducao_agora`)."""
+    vazio = {
+        "nota_publico": None,
+        "nota_critica": None,
+        "nota_rotten_tomatoes": None,
+        "sinopse_omdb": "",
+    }
     chave = getattr(settings, "OMDB_API_KEY", "")
     if not chave or (not titulo and not imdb_id):
         return vazio
     try:
         if imdb_id:
-            parametros = {"apikey": chave, "i": imdb_id}
+            parametros = {"apikey": chave, "i": imdb_id, "plot": "full"}
         else:
-            parametros = {"apikey": chave, "t": titulo, "y": ano or ""}
+            parametros = {"apikey": chave, "t": titulo, "y": ano or "", "plot": "full"}
         resposta = requests.get(OMDB_BASE_URL, params=parametros, timeout=TIMEOUT_SEGUNDOS)
         resposta.raise_for_status()
         dados = resposta.json()
@@ -344,10 +417,14 @@ def buscar_notas_omdb(titulo, ano, imdb_id=""):
                 except ValueError:
                     nota_rotten_tomatoes = None
 
+        plot_bruto = dados.get("Plot") or ""
+        sinopse_omdb = plot_bruto if plot_bruto != "N/A" else ""
+
         return {
             "nota_publico": nota_publico,
             "nota_critica": nota_critica,
             "nota_rotten_tomatoes": nota_rotten_tomatoes,
+            "sinopse_omdb": sinopse_omdb,
         }
     except (requests.RequestException, ValueError) as erro:
         logger.warning("Falha ao buscar notas de %r no OMDb: %s", titulo or imdb_id, erro)

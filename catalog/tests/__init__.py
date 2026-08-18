@@ -46,6 +46,18 @@ Arquivos:
                                   banco gigante tipo o dump do IMDb) e as
                                   funções de listagem que ele usa em
                                   catalog/busca_externa.py.
+- test_sinopse_omdb.py         → sinopse mais detalhada vinda do OMDb
+                                  (`plot=full`), incluindo o cuidado de só
+                                  usar esse texto (que só existe em inglês)
+                                  em títulos com conteúdo nativo em inglês,
+                                  sem nunca misturar idioma na sinopse.
+- test_onde_assistir.py        → "onde assistir" (streaming por assinatura,
+                                  aluguel, compra), vindo do TMDB/JustWatch:
+                                  parsing, salvamento em `_completar_filme`/
+                                  `_completar_serie` e o comando de
+                                  manutenção `atualizar_onde_assistir`
+                                  (que re-busca periodicamente, diferente
+                                  dos outros comandos "completar dados").
 
 Como rodar:
     python manage.py test                        → roda tudo

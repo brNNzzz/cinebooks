@@ -588,6 +588,43 @@ def _completar_imdb_id(item, tipo):
         item.save(update_fields=["imdb_id"])
 
 
+def _guardar_sinopse_detalhada_omdb(item, sinopse_omdb):
+    """Aplica a sinopse mais longa vinda do OMDb (`plot=full`, ver
+    `busca_externa.buscar_notas_omdb`) do jeito mais seguro possível: o OMDb
+    só tem texto em INGLÊS, então:
+
+    - Se o idioma nativo do título (`idioma_tmdb_conteudo`) já é inglês,
+      aplica direto no campo `sinopse` — mas só se for maior que a que já
+      tinha, mesma regra "fica com a mais completa" usada em
+      `_completar_filme`/`_completar_serie` pra sinopse vinda do TMDB.
+    - Pra qualquer outro idioma (a maioria dos títulos daqui, já que o site
+      é em português), NÃO mexe em `sinopse` — isso colocaria um parágrafo
+      em inglês no meio da página em português. Em vez disso, guarda como
+      uma tradução em inglês já pronta no cache `traducoes["en-US"]`: assim,
+      quem trocar o idioma do site pra inglês já vê essa versão mais
+      detalhada, sem gastar uma chamada extra ao TMDB (ver
+      `_texto_no_idioma`)."""
+    if not sinopse_omdb:
+        return
+    if item.idioma_tmdb_conteudo == "en-US":
+        if len(sinopse_omdb) > len(item.sinopse or ""):
+            item.sinopse = sinopse_omdb
+            item.save(update_fields=["sinopse"])
+        return
+
+    cache = dict(item.traducoes or {})
+    traducao_atual = cache.get("en-US") or {}
+    if len(sinopse_omdb) <= len(traducao_atual.get("sinopse", "") or ""):
+        return
+    cache["en-US"] = {
+        "titulo": traducao_atual.get("titulo") or item.titulo,
+        "sinopse": sinopse_omdb,
+        "v": 2,
+    }
+    item.traducoes = cache
+    item.save(update_fields=["traducoes"])
+
+
 def _garantir_notas_omdb(item, tipo=None):
     """Busca as notas de público/crítica/Rotten Tomatoes no OMDb e salva, se
     ainda não tiver. Feito separado do resto do "completar dados" (elenco,
@@ -629,6 +666,9 @@ def _garantir_notas_omdb(item, tipo=None):
             "nota_publico", "nota_critica", "nota_rotten_tomatoes", "notas_omdb_verificadas",
         ]
     )
+    # Sinopse mais detalhada (ver comentário em _guardar_sinopse_detalhada_omdb
+    # sobre por que isso não é tão simples quanto "usa se for maior").
+    _guardar_sinopse_detalhada_omdb(item, notas.get("sinopse_omdb", ""))
 
 
 def _melhor_correspondencia(encontrados, item):
@@ -686,6 +726,10 @@ def _completar_filme(item):
     # ver comentário em Titulo.data_lancamento sobre pra que ela serve.
     if not item.data_lancamento and info.get("data_lancamento"):
         item.data_lancamento = info["data_lancamento"]
+    # Onde assistir muda com o tempo (um título pode sair/entrar de um
+    # serviço de streaming), então não tem o "só preenche se estava vazio"
+    # dos outros campos aqui — sempre atualiza com o que achou agora.
+    item.onde_assistir = info.get("onde_assistir") or {}
     item.dados_completos = True
     item.save()
     if not item.notas_omdb_verificadas:
@@ -729,6 +773,7 @@ def _completar_serie(item):
         item.imdb_id = info["imdb_id"]
     if not item.data_lancamento and info.get("data_lancamento"):
         item.data_lancamento = info["data_lancamento"]
+    item.onde_assistir = info.get("onde_assistir") or {}
     item.dados_completos = True
     item.save()
     if not item.notas_omdb_verificadas:

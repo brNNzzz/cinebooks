@@ -124,6 +124,17 @@ class Titulo(models.Model):
     # registro.
     traducoes = models.JSONField("traduções para exibição", default=dict, blank=True)
 
+    # Onde assistir (streaming por assinatura, aluguel, compra), pra região
+    # do Brasil — vem do TMDB (que por sua vez usa a JustWatch como fonte),
+    # buscado junto com o resto dos dados complementares (ver
+    # `views._completar_filme`/`_completar_serie`). Formato:
+    # {"link": "...", "streaming": [{"nome": "...", "logo_url": "..."}, ...],
+    # "aluguel": [...], "compra": [...]} — ou {} se não achou nada ainda, ou
+    # se o título não tem essa informação disponível. Só existe pra
+    # filme/série; livro herda o campo (por causa da classe abstrata) mas
+    # nunca é preenchido.
+    onde_assistir = models.JSONField("onde assistir", default=dict, blank=True)
+
     # Guarda o ID do título na API externa (TMDB para filme/série, Open
     # Library para livro). Usado depois pra completar os dados (elenco,
     # sinopse maior) sem precisar buscar o título de novo pelo nome.

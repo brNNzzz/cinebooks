@@ -79,6 +79,54 @@
 </div>
 
 {% if tipo == "filme" or tipo == "serie" %}
+    {% if item.onde_assistir.streaming or item.onde_assistir.aluguel or item.onde_assistir.compra %}
+        <hr>
+        <h2 class="h4 mb-3">{% t "onde_assistir_titulo" %}</h2>
+
+        {% if item.onde_assistir.streaming %}
+            <p class="text-muted small mb-1">{% t "onde_assistir_streaming" %}</p>
+            <div class="d-flex flex-wrap gap-2 mb-3">
+                {% for provedor in item.onde_assistir.streaming %}
+                    <span class="d-inline-flex align-items-center gap-1 border rounded px-2 py-1">
+                        {% if provedor.logo_url %}<img src="{{ provedor.logo_url }}" alt="" style="width:24px;height:24px;border-radius:4px;">{% endif %}
+                        <span class="small">{{ provedor.nome }}</span>
+                    </span>
+                {% endfor %}
+            </div>
+        {% endif %}
+
+        {% if item.onde_assistir.aluguel %}
+            <p class="text-muted small mb-1">{% t "onde_assistir_aluguel" %}</p>
+            <div class="d-flex flex-wrap gap-2 mb-3">
+                {% for provedor in item.onde_assistir.aluguel %}
+                    <span class="d-inline-flex align-items-center gap-1 border rounded px-2 py-1">
+                        {% if provedor.logo_url %}<img src="{{ provedor.logo_url }}" alt="" style="width:24px;height:24px;border-radius:4px;">{% endif %}
+                        <span class="small">{{ provedor.nome }}</span>
+                    </span>
+                {% endfor %}
+            </div>
+        {% endif %}
+
+        {% if item.onde_assistir.compra %}
+            <p class="text-muted small mb-1">{% t "onde_assistir_compra" %}</p>
+            <div class="d-flex flex-wrap gap-2 mb-3">
+                {% for provedor in item.onde_assistir.compra %}
+                    <span class="d-inline-flex align-items-center gap-1 border rounded px-2 py-1">
+                        {% if provedor.logo_url %}<img src="{{ provedor.logo_url }}" alt="" style="width:24px;height:24px;border-radius:4px;">{% endif %}
+                        <span class="small">{{ provedor.nome }}</span>
+                    </span>
+                {% endfor %}
+            </div>
+        {% endif %}
+
+        <p class="text-muted" style="font-size:0.75rem;">
+            {% t "onde_assistir_atribuicao" %}
+            {% if item.onde_assistir.link %}
+                <a href="{{ item.onde_assistir.link }}" target="_blank" rel="noopener">JustWatch</a>
+            {% endif %}
+        </p>
+    {% endif %}
+
     {% if item.elenco.all %}
         <hr>
         <h2 class="h4 mb-3">{% t "detalhe_elenco" %}</h2>
