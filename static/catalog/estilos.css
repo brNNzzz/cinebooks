@@ -419,13 +419,3 @@ footer.border-top {
 footer small {
     color: #9a9ab0;
 }
-
-/* Selo de serviço de streaming clicável (seção "onde assistir" da página
-   de detalhe) — feedback visual de que é um link, sem exagerar. */
-.provedor-badge {
-    transition: border-color 0.15s ease, transform 0.15s ease;
-}
-.provedor-badge:hover {
-    border-color: #ff1f4b !important;
-    transform: translateY(-1px);
-}

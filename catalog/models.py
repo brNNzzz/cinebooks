@@ -135,6 +135,13 @@ class Titulo(models.Model):
     # nunca é preenchido.
     onde_assistir = models.JSONField("onde assistir", default=dict, blank=True)
 
+    # Link direto pro trailer no YouTube (ex: "https://www.youtube.com/
+    # watch?v=..."), quando o TMDB tiver um cadastrado — busca o vídeo
+    # OFICIAL mais adequado (ver `busca_externa._extrair_trailer_youtube`).
+    # Fica em branco se não achar nenhum. Só existe pra filme/série; livro
+    # herda o campo (classe abstrata) mas nunca é preenchido.
+    trailer_youtube_url = models.URLField("trailer no YouTube", blank=True)
+
     # Guarda o ID do título na API externa (TMDB para filme/série, Open
     # Library para livro). Usado depois pra completar os dados (elenco,
     # sinopse maior) sem precisar buscar o título de novo pelo nome.

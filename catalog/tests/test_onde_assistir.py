@@ -205,3 +205,20 @@ class AtualizarOndeAssistirCommandTest(TestCase):
 
         filme.refresh_from_db()
         self.assertEqual(filme.onde_assistir, onde_assistir_atual)
+
+    def test_tambem_preenche_trailer_ainda_vazio_de_graca(self):
+        # Já que o comando faz a chamada de qualquer forma, aproveita pra
+        # preencher trailer_youtube_url de quem ainda não tinha — sem
+        # sobrescrever de novo depois (ver test_sinopse.../test_trailer_...).
+        filme = criar_filme(id_externo="123", trailer_youtube_url="")
+        info_simulada = {
+            "onde_assistir": {},
+            "trailer_youtube_url": "https://www.youtube.com/watch?v=abc",
+        }
+        with patch("catalog.busca_externa.tmdb_configurado", return_value=True):
+            with patch("catalog.management.commands.atualizar_onde_assistir.busca_externa.detalhes_filme", return_value=info_simulada):
+                with patch("catalog.management.commands.atualizar_onde_assistir.busca_externa.detalhes_serie", return_value={"onde_assistir": {}}):
+                    call_command("atualizar_onde_assistir")
+
+        filme.refresh_from_db()
+        self.assertEqual(filme.trailer_youtube_url, "https://www.youtube.com/watch?v=abc")

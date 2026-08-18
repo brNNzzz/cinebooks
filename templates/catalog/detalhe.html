@@ -17,16 +17,22 @@
                 <span class="badge bg-secondary mb-2">{{ rotulo }}</span>
                 <h1 class="h3">{{ item.titulo_exibicao }} <small class="text-muted">({{ item.ano_lancamento }})</small></h1>
             </div>
-            {% if user.is_authenticated %}
-                <form action="{% url 'alternar_watchlist' tipo item.pk %}" method="post">
-                    {% csrf_token %}
-                    {% if na_watchlist %}
-                        <button type="submit" class="btn btn-sm btn-outline-danger">{% t "watchlist_remover" %}</button>
-                    {% else %}
-                        <button type="submit" class="btn btn-sm btn-outline-primary">{% t "watchlist_adicionar" %}</button>
-                    {% endif %}
-                </form>
-            {% endif %}
+            <div class="d-flex gap-2">
+                {% if item.trailer_youtube_url %}
+                    <a href="{{ item.trailer_youtube_url }}" target="_blank" rel="noopener"
+                       class="btn btn-sm btn-danger">{% t "detalhe_assistir_trailer" %}</a>
+                {% endif %}
+                {% if user.is_authenticated %}
+                    <form action="{% url 'alternar_watchlist' tipo item.pk %}" method="post">
+                        {% csrf_token %}
+                        {% if na_watchlist %}
+                            <button type="submit" class="btn btn-sm btn-outline-danger">{% t "watchlist_remover" %}</button>
+                        {% else %}
+                            <button type="submit" class="btn btn-sm btn-outline-primary">{% t "watchlist_adicionar" %}</button>
+                        {% endif %}
+                    </form>
+                {% endif %}
+            </div>
         </div>
 
         {% if media %}

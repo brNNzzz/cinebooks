@@ -58,6 +58,10 @@ Arquivos:
                                   manutenção `atualizar_onde_assistir`
                                   (que re-busca periodicamente, diferente
                                   dos outros comandos "completar dados").
+- test_trailer_youtube.py      → botão "Assistir trailer", que abre o
+                                  trailer no YouTube (vindo do TMDB, sem
+                                  baixar/hospedar nenhum vídeo — só um link
+                                  direto pro YouTube).
 
 Como rodar:
     python manage.py test                        → roda tudo

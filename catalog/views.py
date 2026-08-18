@@ -730,6 +730,10 @@ def _completar_filme(item):
     # serviço de streaming), então não tem o "só preenche se estava vazio"
     # dos outros campos aqui — sempre atualiza com o que achou agora.
     item.onde_assistir = info.get("onde_assistir") or {}
+    # Trailer, ao contrário de onde assistir, não fica desatualizado depois
+    # de encontrado uma vez — então segue o mesmo padrão de imdb_id/poster.
+    if not item.trailer_youtube_url and info.get("trailer_youtube_url"):
+        item.trailer_youtube_url = info["trailer_youtube_url"]
     item.dados_completos = True
     item.save()
     if not item.notas_omdb_verificadas:
@@ -774,6 +778,8 @@ def _completar_serie(item):
     if not item.data_lancamento and info.get("data_lancamento"):
         item.data_lancamento = info["data_lancamento"]
     item.onde_assistir = info.get("onde_assistir") or {}
+    if not item.trailer_youtube_url and info.get("trailer_youtube_url"):
+        item.trailer_youtube_url = info["trailer_youtube_url"]
     item.dados_completos = True
     item.save()
     if not item.notas_omdb_verificadas:

@@ -15,6 +15,12 @@ Só atualiza quem já tem um `id_externo` (TMDB) — quem ainda não tem precisa
 passar primeiro por `_completar_filme`/`_completar_serie` (acontece sozinho
 na primeira visita à página de cada título).
 
+Como já faz essa chamada de qualquer forma, aproveita e também preenche o
+`trailer_youtube_url` de quem ainda não tinha (título cadastrado antes desse
+campo existir) — diferente de onde-assistir, o trailer não fica
+desatualizado com o tempo, então só preenche se ainda estiver vazio, sem
+sobrescrever de novo a cada rodada.
+
 Uso:
     python manage.py atualizar_onde_assistir
 """
@@ -54,10 +60,18 @@ class Command(BaseCommand):
             info = funcao_detalhes(item.id_externo, idioma=idioma)
             if info is None:
                 continue  # falha temporária (rede/API) — tenta de novo na próxima rodada
-            novo = info.get("onde_assistir") or {}
-            if novo != item.onde_assistir:
-                item.onde_assistir = novo
-                item.save(update_fields=["onde_assistir"])
+
+            campos_alterados = []
+            novo_onde_assistir = info.get("onde_assistir") or {}
+            if novo_onde_assistir != item.onde_assistir:
+                item.onde_assistir = novo_onde_assistir
+                campos_alterados.append("onde_assistir")
+            if not item.trailer_youtube_url and info.get("trailer_youtube_url"):
+                item.trailer_youtube_url = info["trailer_youtube_url"]
+                campos_alterados.append("trailer_youtube_url")
+
+            if campos_alterados:
+                item.save(update_fields=campos_alterados)
                 contador += 1
                 self.stdout.write(f"  {rotulo}: {item.titulo}")
         return contador
