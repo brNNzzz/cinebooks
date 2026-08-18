@@ -12,8 +12,22 @@
              class="poster" alt="Pôster de {{ item.titulo_exibicao }}">
     </div>
     <div class="col-md-9">
-        <span class="badge bg-secondary mb-2">{{ rotulo }}</span>
-        <h1 class="h3">{{ item.titulo_exibicao }} <small class="text-muted">({{ item.ano_lancamento }})</small></h1>
+        <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
+            <div>
+                <span class="badge bg-secondary mb-2">{{ rotulo }}</span>
+                <h1 class="h3">{{ item.titulo_exibicao }} <small class="text-muted">({{ item.ano_lancamento }})</small></h1>
+            </div>
+            {% if user.is_authenticated %}
+                <form action="{% url 'alternar_watchlist' tipo item.pk %}" method="post">
+                    {% csrf_token %}
+                    {% if na_watchlist %}
+                        <button type="submit" class="btn btn-sm btn-outline-danger">{% t "watchlist_remover" %}</button>
+                    {% else %}
+                        <button type="submit" class="btn btn-sm btn-outline-primary">{% t "watchlist_adicionar" %}</button>
+                    {% endif %}
+                </form>
+            {% endif %}
+        </div>
 
         {% if media %}
             <p class="fs-5 mb-1">⭐ <strong>{{ media }}</strong> / 5 &middot; {{ item.total_avaliacoes }} {% t "detalhe_avaliacoes_no_site" %}</p>

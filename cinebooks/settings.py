@@ -11,6 +11,7 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
 import os
+import sys
 from pathlib import Path
 
 import dj_database_url
@@ -167,6 +168,17 @@ STORAGES = {
         "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
     },
 }
+
+# Rodando os testes automatizados (`python manage.py test`)? Troca pro
+# storage de estáticos mais simples, sem manifesto/hash de arquivo. Sem
+# isso, TODO teste que renderiza uma página (praticamente todos, já que
+# base.html carrega o favicon via `{% static %}`) quebraria com o erro
+# "Missing staticfiles manifest entry" — o CompressedManifestStaticFiles
+# Storage acima (usado em produção pelo Whitenoise, pra cache-busting) só
+# funciona depois de rodar `collectstatic` pelo menos uma vez, o que
+# ninguém faz antes de simplesmente querer rodar os testes.
+if "test" in sys.argv:
+    STORAGES["staticfiles"]["BACKEND"] = "django.contrib.staticfiles.storage.StaticFilesStorage"
 
 MEDIA_URL = "media/"
 MEDIA_ROOT = BASE_DIR / "media"

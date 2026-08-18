@@ -256,3 +256,40 @@ class Avaliacao(models.Model):
 
     def __str__(self):
         return f"{self.usuario} → {self.titulo_avaliado} ({self.nota}/5)"
+
+
+class QueroVer(models.Model):
+    """"Watchlist": um usuário marca um Filme, Série ou Livro que ainda não
+    viu/leu mas quer ver depois — separado das avaliações de propósito, já
+    que Avaliacao é pra quem JÁ assistiu/leu e quer dar nota/comentário.
+
+    Mesma técnica de "Generic Foreign Key" usada em Avaliacao (ver
+    comentário lá em cima): content_type + object_id juntos apontam pra
+    QUALQUER um dos três modelos (Filme, Serie ou Livro), sem precisar de
+    uma tabela de watchlist separada pra cada tipo."""
+
+    usuario = models.ForeignKey(
+        settings.AUTH_USER_MODEL, verbose_name="usuário", on_delete=models.CASCADE
+    )
+    criado_em = models.DateTimeField("adicionado em", auto_now_add=True)
+
+    content_type = models.ForeignKey(ContentType, on_delete=models.CASCADE)
+    object_id = models.PositiveIntegerField()
+    titulo_lista = GenericForeignKey("content_type", "object_id")
+
+    class Meta:
+        verbose_name = "item da watchlist"
+        verbose_name_plural = "itens da watchlist"
+        ordering = ["-criado_em"]
+        constraints = [
+            # Mesmo título não pode ser adicionado duas vezes pelo mesmo
+            # usuário — o botão "quero ver depois" vira "remover da lista"
+            # assim que o item já está lá (ver views.alternar_watchlist).
+            models.UniqueConstraint(
+                fields=["usuario", "content_type", "object_id"],
+                name="usuario_adiciona_um_titulo_uma_vez_na_watchlist",
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.usuario} quer ver: {self.titulo_lista}"

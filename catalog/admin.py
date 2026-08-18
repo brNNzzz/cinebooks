@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import Avaliacao, Filme, Genero, Livro, Pessoa, Serie
+from .models import Avaliacao, Filme, Genero, Livro, Pessoa, QueroVer, Serie
 
 
 @admin.register(Genero)
@@ -49,3 +49,8 @@ class LivroAdmin(admin.ModelAdmin):
 class AvaliacaoAdmin(admin.ModelAdmin):
     list_display = ["titulo_avaliado", "usuario", "nota", "criado_em"]
     list_filter = ["nota"]
+
+
+@admin.register(QueroVer)
+class QueroVerAdmin(admin.ModelAdmin):
+    list_display = ["titulo_lista", "usuario", "criado_em"]

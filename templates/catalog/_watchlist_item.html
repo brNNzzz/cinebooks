@@ -1,0 +1,16 @@
+{% load i18n_custom %}
+<div class="border-bottom py-2">
+    <div class="d-flex justify-content-between align-items-center">
+        <a href="{% url 'detalhe' item_watchlist.tipo item_watchlist.object_id %}" class="fw-semibold text-decoration-none">
+            {{ item_watchlist.titulo_lista.titulo }}
+            <span class="text-muted small">({{ item_watchlist.titulo_lista.ano_lancamento }})</span>
+        </a>
+        <div class="d-flex align-items-center gap-2">
+            <span class="text-muted small">{{ item_watchlist.criado_em|date:"d/m/Y" }}</span>
+            <form action="{% url 'alternar_watchlist' item_watchlist.tipo item_watchlist.object_id %}" method="post" class="d-inline">
+                {% csrf_token %}
+                <button type="submit" class="btn btn-sm btn-outline-danger py-0 px-2">{% t "watchlist_remover" %}</button>
+            </form>
+        </div>
+    </div>
+</div>

@@ -8,6 +8,7 @@ from django.contrib.admin.views.decorators import staff_member_required
 from django.contrib.auth import login
 from django.contrib.auth.decorators import login_required
 from django.contrib.contenttypes.models import ContentType
+from django.core.paginator import Paginator
 from django.db import connections
 from django.db.models import Avg, Count, Q
 from django.http import Http404
@@ -18,7 +19,7 @@ from django.views.decorators.http import require_POST
 from . import busca_externa
 from .forms import AvaliacaoForm, RegistroForm
 from .i18n import IDIOMA_PADRAO, IDIOMAS, traduzir
-from .models import Avaliacao, Filme, Genero, Livro, Pessoa, Serie
+from .models import Avaliacao, Filme, Genero, Livro, Pessoa, QueroVer, Serie
 
 logger = logging.getLogger(__name__)
 
@@ -186,27 +187,92 @@ def home(request):
     return render(request, "catalog/home.html", contexto)
 
 
+# Quantos títulos aparecem por página na listagem (catalog/lista.html).
+# Com poucos títulos no catálogo não faz diferença nenhuma, mas evita que a
+# página fique gigante e lenta de rolar se o catálogo crescer bastante.
+ITENS_POR_PAGINA = 12
+
+
 def lista(request, tipo):
     info = TIPOS.get(tipo)
     if info is None:
         raise Http404("Categoria não encontrada")
+    idioma_atual = _idioma_atual(request)
     queryset = _com_media(info["model"].objects.all())
 
     termo = request.GET.get("q", "").strip()
     if termo:
         queryset = queryset.filter(titulo__icontains=termo)
 
-    genero_id = request.GET.get("genero", "")
+    genero_id = request.GET.get("genero", "").strip()
     if genero_id:
         queryset = queryset.filter(generos__id=genero_id)
 
+    # Lista de anos que existem de verdade nesse tipo de título, pra montar
+    # o <select> de ano — calculada ANTES de aplicar o filtro de ano em si
+    # (senão, depois de escolher um ano, o dropdown ficaria só com aquela
+    # opção, sem jeito de voltar pra "todos os anos" olhando as outras).
+    anos_disponiveis = list(
+        info["model"]
+        .objects.order_by("-ano_lancamento")
+        .values_list("ano_lancamento", flat=True)
+        .distinct()
+    )
+
+    ano = request.GET.get("ano", "").strip()
+    if ano:
+        queryset = queryset.filter(ano_lancamento=ano)
+
+    # Nota mínima do PÚBLICO DO SITE (média das avaliações daqui, o mesmo
+    # número que aparece na estrelinha do card) — não confundir com
+    # nota_publico, que é a nota vinda da internet (IMDb/Open Library).
+    nota_minima = request.GET.get("nota_minima", "").strip()
+    if nota_minima:
+        try:
+            queryset = queryset.filter(media_notas__gte=float(nota_minima))
+        except ValueError:
+            nota_minima = ""  # valor inválido na URL — ignora em vez de quebrar a página
+
+    # O filtro de gênero acima faz um JOIN com a tabela de gêneros (relação
+    # muitos-pra-muitos): sem o distinct(), um título com mais de um gênero
+    # cadastrado apareceria REPETIDO na lista, uma vez pra cada gênero dele.
+    queryset = queryset.distinct()
+
+    # Reforça a ordem explicitamente (mais recente primeiro, empate por
+    # título): o `_com_media` acima faz um annotate() com Avg/Count, e
+    # sempre que isso acontece o Django deixa de aplicar sozinho a ordenação
+    # padrão do modelo (`Meta.ordering`, lá em Titulo) — sem essa linha, a
+    # ordem virava praticamente aleatória (a do banco), e pior ainda: cada
+    # PÁGINA da paginação podia repetir ou pular títulos, porque a ordem
+    # mudava a cada consulta.
+    queryset = queryset.order_by("-ano_lancamento", "titulo")
+
+    paginator = Paginator(queryset, ITENS_POR_PAGINA)
+    pagina = paginator.get_page(request.GET.get("pagina"))
+
+    # Pra trocar de página SEM perder os filtros já escolhidos (busca,
+    # gênero, ano, nota mínima) — os links "anterior"/"próxima" do template
+    # usam essa string pra montar a URL completa (?q=...&genero=...&pagina=N).
+    parametros = request.GET.copy()
+    parametros.pop("pagina", None)
+
     contexto = {
         "tipo": tipo,
-        "rotulo_plural": traduzir(info["rotulo_plural_chave"], _idioma_atual(request)),
-        "itens": queryset,
+        "rotulo_plural": traduzir(info["rotulo_plural_chave"], idioma_atual),
+        "itens": pagina,
         "generos": Genero.objects.all(),
         "termo": termo,
         "genero_id": genero_id,
+        "anos_disponiveis": anos_disponiveis,
+        "ano_selecionado": ano,
+        "nota_minima": nota_minima,
+        "query_sem_pagina": parametros.urlencode(),
+        # Texto pronto ("Página 2 de 5") já formatado aqui na view, porque a
+        # tag de template `{% t %}` só devolve o texto traduzido — não tem
+        # suporte a colocar valores dentro dele (ver catalog/i18n_custom.py).
+        "pagina_info": traduzir("lista_pagina_info", idioma_atual).format(
+            atual=pagina.number, total=paginator.num_pages
+        ),
     }
     return render(request, "catalog/lista.html", contexto)
 
@@ -287,11 +353,17 @@ def detalhe(request, tipo, pk):
     )
 
     minha_avaliacao = None
+    na_watchlist = False
     if request.user.is_authenticated:
         content_type = ContentType.objects.get_for_model(info["model"])
         minha_avaliacao = Avaliacao.objects.filter(
             usuario=request.user, content_type=content_type, object_id=item.pk
         ).first()
+        # Usado pra decidir se o botão mostra "+ Quero ver depois" ou
+        # "Remover da lista" (ver alternar_watchlist, que faz o toggle).
+        na_watchlist = QueroVer.objects.filter(
+            usuario=request.user, content_type=content_type, object_id=item.pk
+        ).exists()
 
     form = AvaliacaoForm(instance=minha_avaliacao, idioma=_idioma_atual(request))
 
@@ -303,8 +375,39 @@ def detalhe(request, tipo, pk):
         "media": item.media_avaliacoes(),
         "form": form,
         "minha_avaliacao": minha_avaliacao,
+        "na_watchlist": na_watchlist,
     }
     return render(request, "catalog/detalhe.html", contexto)
+
+
+@login_required
+@require_POST
+def alternar_watchlist(request, tipo, pk):
+    """Adiciona OU remove (alterna, dependendo do estado atual) um título da
+    watchlist ("quero ver depois") do usuário logado — um botão só faz as
+    duas coisas, então não precisa de duas views/URLs separadas.
+
+    Separado de propósito da avaliação: Avaliacao é pra quem JÁ
+    assistiu/leu e quer dar nota; QueroVer é só uma lista de lembrete de
+    títulos que a pessoa ainda PRETENDE assistir/ler."""
+    info = TIPOS.get(tipo)
+    if info is None:
+        raise Http404("Categoria não encontrada")
+    item = get_object_or_404(info["model"], pk=pk)
+    content_type = ContentType.objects.get_for_model(info["model"])
+    idioma_atual = _idioma_atual(request)
+
+    existente = QueroVer.objects.filter(
+        usuario=request.user, content_type=content_type, object_id=item.pk
+    ).first()
+    if existente:
+        existente.delete()
+        messages.success(request, traduzir("watchlist_removido", idioma_atual))
+    else:
+        QueroVer.objects.create(usuario=request.user, content_type=content_type, object_id=item.pk)
+        messages.success(request, traduzir("watchlist_adicionado", idioma_atual))
+
+    return redirect("detalhe", tipo=tipo, pk=pk)
 
 
 @login_required
@@ -966,6 +1069,22 @@ def perfil(request):
         else None
     )
 
+    # Mesma ideia das avaliações acima (separadas em filme/série/livro pra
+    # virar 3 abas), só que pra watchlist ("quero ver depois") em vez de
+    # avaliações já feitas.
+    itens_watchlist = list(
+        QueroVer.objects.filter(usuario=request.user)
+        .select_related("content_type")
+        .order_by("-criado_em")
+    )
+    watchlist_por_tipo = {"filme": [], "serie": [], "livro": []}
+    for item_watchlist in itens_watchlist:
+        tipo_desse_item = tipos_por_content_type.get(item_watchlist.content_type_id)
+        if not tipo_desse_item:
+            continue
+        item_watchlist.tipo = tipo_desse_item
+        watchlist_por_tipo[tipo_desse_item].append(item_watchlist)
+
     contexto = {
         "avaliacoes_filmes": avaliacoes_por_tipo["filme"],
         "avaliacoes_series": avaliacoes_por_tipo["serie"],
@@ -974,6 +1093,10 @@ def perfil(request):
         "nota_media_dada": nota_media_dada,
         "genero_favorito": genero_favorito,
         "favorito": favorito,
+        "watchlist_filmes": watchlist_por_tipo["filme"],
+        "watchlist_series": watchlist_por_tipo["serie"],
+        "watchlist_livros": watchlist_por_tipo["livro"],
+        "total_watchlist": len(itens_watchlist),
     }
     return render(request, "catalog/perfil.html", contexto)
 

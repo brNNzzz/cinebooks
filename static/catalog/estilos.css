@@ -252,6 +252,11 @@ h2.h4::before {
     border-color: #7a1f2e;
     color: #ff9caa;
 }
+.alert-success {
+    background-color: #0d2418;
+    border-color: #1f7a4d;
+    color: #7ee6b0;
+}
 .form-text {
     color: #9a9ab0;
 }

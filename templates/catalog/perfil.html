@@ -100,4 +100,48 @@
         {% endfor %}
     </div>
 </div>
+
+<h2 class="h4 mb-3 mt-5">{% t "watchlist_titulo" %}</h2>
+
+<ul class="nav nav-tabs mb-3" id="abasWatchlist" role="tablist">
+    <li class="nav-item" role="presentation">
+        <button class="nav-link active" id="tab-watchlist-filmes" data-bs-toggle="tab" data-bs-target="#painel-watchlist-filmes" type="button" role="tab">
+            🎬 {% t "nav_filmes" %} ({{ watchlist_filmes|length }})
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="tab-watchlist-series" data-bs-toggle="tab" data-bs-target="#painel-watchlist-series" type="button" role="tab">
+            📺 {% t "nav_series" %} ({{ watchlist_series|length }})
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="tab-watchlist-livros" data-bs-toggle="tab" data-bs-target="#painel-watchlist-livros" type="button" role="tab">
+            📚 {% t "nav_livros" %} ({{ watchlist_livros|length }})
+        </button>
+    </li>
+</ul>
+
+<div class="tab-content" id="conteudoAbasWatchlist">
+    <div class="tab-pane fade show active" id="painel-watchlist-filmes" role="tabpanel">
+        {% for item_watchlist in watchlist_filmes %}
+            {% include "catalog/_watchlist_item.html" %}
+        {% empty %}
+            <p class="text-muted">{% t "watchlist_vazia" %}</p>
+        {% endfor %}
+    </div>
+    <div class="tab-pane fade" id="painel-watchlist-series" role="tabpanel">
+        {% for item_watchlist in watchlist_series %}
+            {% include "catalog/_watchlist_item.html" %}
+        {% empty %}
+            <p class="text-muted">{% t "watchlist_vazia" %}</p>
+        {% endfor %}
+    </div>
+    <div class="tab-pane fade" id="painel-watchlist-livros" role="tabpanel">
+        {% for item_watchlist in watchlist_livros %}
+            {% include "catalog/_watchlist_item.html" %}
+        {% empty %}
+            <p class="text-muted">{% t "watchlist_vazia" %}</p>
+        {% endfor %}
+    </div>
+</div>
 {% endblock %}

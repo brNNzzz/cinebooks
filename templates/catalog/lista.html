@@ -7,7 +7,7 @@
 <h1 class="h3 mb-4">{{ rotulo_plural }}</h1>
 
 <form method="get" class="row g-2 mb-4">
-    <div class="col-sm-6 col-md-4">
+    <div class="col-sm-6 col-md-3">
         <input type="text" name="q" class="form-control" placeholder="{% t 'lista_buscar_placeholder' %}" value="{{ termo }}">
     </div>
     <div class="col-sm-4 col-md-3">
@@ -18,8 +18,24 @@
             {% endfor %}
         </select>
     </div>
-    <div class="col-sm-2">
-        <button type="submit" class="btn btn-primary">{% t "lista_filtrar" %}</button>
+    <div class="col-sm-4 col-md-2">
+        <select name="ano" class="form-select">
+            <option value="">{% t "lista_todos_anos" %}</option>
+            {% for ano in anos_disponiveis %}
+                <option value="{{ ano }}" {% if ano_selecionado == ano|stringformat:"s" %}selected{% endif %}>{{ ano }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div class="col-sm-4 col-md-2">
+        <select name="nota_minima" class="form-select">
+            <option value="">{% t "lista_todas_notas" %}</option>
+            {% for n in "12345" %}
+                <option value="{{ n }}" {% if nota_minima == n %}selected{% endif %}>⭐ {{ n }}+</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div class="col-sm-4 col-md-2">
+        <button type="submit" class="btn btn-primary w-100">{% t "lista_filtrar" %}</button>
     </div>
 </form>
 
@@ -28,4 +44,20 @@
         <p class="text-muted">{% t "lista_nenhum_titulo" %}</p>
     {% endfor %}
 </div>
+
+{% if itens.paginator.num_pages > 1 %}
+    <nav class="d-flex justify-content-between align-items-center mt-4" aria-label="Paginação">
+        <div>
+            {% if itens.has_previous %}
+                <a href="?{{ query_sem_pagina }}&pagina={{ itens.previous_page_number }}" class="btn btn-sm btn-outline-secondary">&larr; {% t "lista_pagina_anterior" %}</a>
+            {% endif %}
+        </div>
+        <span class="text-muted small">{{ pagina_info }}</span>
+        <div>
+            {% if itens.has_next %}
+                <a href="?{{ query_sem_pagina }}&pagina={{ itens.next_page_number }}" class="btn btn-sm btn-outline-secondary">{% t "lista_pagina_proxima" %} &rarr;</a>
+            {% endif %}
+        </div>
+    </nav>
+{% endif %}
 {% endblock %}

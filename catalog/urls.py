@@ -28,4 +28,5 @@ urlpatterns = [
     path("<str:tipo>/", views.lista, name="lista"),
     path("<str:tipo>/<int:pk>/", views.detalhe, name="detalhe"),
     path("<str:tipo>/<int:pk>/avaliar/", views.avaliar, name="avaliar"),
+    path("<str:tipo>/<int:pk>/watchlist/", views.alternar_watchlist, name="alternar_watchlist"),
 ]
