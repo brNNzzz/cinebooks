@@ -74,6 +74,12 @@ Arquivos:
                                   uma capa própria pra esse idioma. Livro
                                   nunca troca de capa (Open Library não tem
                                   esse conceito).
+- test_exibicao_em_listas.py   → confere que título/capa traduzidos (ver
+                                  acima) também aparecem nas páginas que
+                                  mostram VÁRIOS cards de uma vez — home
+                                  ("recentes"), listagem por tipo e busca —
+                                  não só na página de detalhe de um título
+                                  e no carrossel de destaque.
 - test_rebuscar_sem_correspondencia.py → comando que destrava títulos que
                                   nunca acharam correspondência no TMDB (ex:
                                   a primeira tentativa aconteceu antes da

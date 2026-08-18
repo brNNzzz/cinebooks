@@ -106,7 +106,17 @@ def _buscar_traducao_agora(item, tipo, idioma):
         "v": 2,
     }
     item.traducoes = cache
-    item.save(update_fields=["traducoes"])
+    try:
+        item.save(update_fields=["traducoes"])
+    except Exception:
+        # Salvar o cache é só uma OTIMIZAÇÃO (evita buscar de novo na
+        # próxima visita) — se der erro (ex: banco ocupado num instante em
+        # que várias traduções estão sendo salvas ao mesmo tempo, chamadas
+        # em paralelo via _traduzir_varios), não faz sentido derrubar a
+        # página inteira por causa disso. A pessoa ainda vê o título/pôster
+        # traduzidos AGORA (devolvidos abaixo); só não fica em cache pra
+        # próxima vez, e tenta salvar de novo então.
+        logger.exception("Falha ao salvar cache de tradução de %s #%s (%s)", tipo, item.pk, idioma)
     return titulo, sinopse
 
 
@@ -198,6 +208,25 @@ def _poster_no_idioma(item, tipo, idioma_atual):
     return traducao.get("poster_url") or item.poster_url
 
 
+def _aplicar_exibicao(itens_com_tipo, idioma_tmdb_atual):
+    """Prepara `titulo_exibicao`/`sinopse_exibicao`/`poster_exibicao` (texto e
+    capa pra EXIBIR, no idioma em que a pessoa está navegando agora) pra uma
+    leva de itens de uma vez — usada em qualquer lugar que mostra vários
+    cards ao mesmo tempo (home, listagem, busca), não só a página de
+    detalhe de um único título.
+
+    Primeiro dispara `_traduzir_varios` (busca em PARALELO, uma chamada de
+    API ao mesmo tempo pra cada item que ainda não tem tradução cacheada
+    pra esse idioma — sem isso, uma tela com vários cards ficaria lenta
+    esperando uma chamada terminar pra começar a próxima), e só depois lê o
+    resultado (já cacheado) pra cada item, exatamente como a view `detalhe`
+    já fazia pra um item só."""
+    _traduzir_varios(itens_com_tipo, idioma_tmdb_atual)
+    for item, tipo in itens_com_tipo:
+        item.titulo_exibicao, item.sinopse_exibicao = _texto_no_idioma(item, tipo, idioma_tmdb_atual)
+        item.poster_exibicao = _poster_no_idioma(item, tipo, idioma_tmdb_atual)
+
+
 def _destaques_do_ano(idioma_atual=None):
     """Uma ÚNICA fileira horizontal, logo abaixo do cabeçalho — junta filme,
     série e livro do ano ATUAL (o ano civil de verdade, tipo 2026), do mais
@@ -233,14 +262,11 @@ def _destaques_do_ano(idioma_atual=None):
     itens.sort(key=lambda i: (i.nota_publico is None, -(i.nota_publico or 0)))
     itens = itens[:LIMITE_DESTAQUES_ANO]
 
-    # Traduz em PARALELO só os itens que realmente vão aparecer (depois do
-    # corte acima) — assim trocar de idioma já mostra tudo certo na mesma
-    # troca, sem precisar recarregar de novo, e sem esperar uma chamada de
-    # API terminar pra começar a próxima.
-    _traduzir_varios([(item, item.tipo) for item in itens], idioma_atual)
-    for item in itens:
-        item.titulo_exibicao, item.sinopse_exibicao = _texto_no_idioma(item, item.tipo, idioma_atual)
-        item.poster_exibicao = _poster_no_idioma(item, item.tipo, idioma_atual)
+    # Traduz (título/sinopse/pôster) só os itens que realmente vão aparecer
+    # (depois do corte acima), em paralelo — assim trocar de idioma já
+    # mostra tudo certo na mesma troca, sem precisar recarregar de novo (ver
+    # _aplicar_exibicao).
+    _aplicar_exibicao([(item, item.tipo) for item in itens], idioma_atual)
 
     return {"ano": ano, "itens": itens}
 
@@ -265,17 +291,37 @@ def home(request):
     # `ano_lancamento__lte=ano_atual`, só entra na lista quem já lançou (ou
     # lança até o fim do ano civil atual).
     ano_atual = timezone.now().year
+    idioma_tmdb_atual = _idioma_tmdb_atual(request)
+
+    filmes = list(
+        _com_media(Filme.objects.filter(ano_lancamento__lte=ano_atual)).order_by("-ano_lancamento")[
+            :ITENS_POR_FILEIRA_HOME
+        ]
+    )
+    series = list(
+        _com_media(Serie.objects.filter(ano_lancamento__lte=ano_atual)).order_by("-ano_lancamento")[
+            :ITENS_POR_FILEIRA_HOME
+        ]
+    )
+    livros = list(
+        _com_media(Livro.objects.filter(ano_lancamento__lte=ano_atual)).order_by("-ano_lancamento")[
+            :ITENS_POR_FILEIRA_HOME
+        ]
+    )
+    # Título/sinopse/pôster no idioma da navegação, pras 3 fileiras
+    # "recentes" (não só o carrossel de destaque) — sem isso, trocar de
+    # idioma só mudava o carrossel do topo, deixando o resto da home
+    # inconsistente (título/capa continuavam no idioma original).
+    _aplicar_exibicao(
+        [(f, "filme") for f in filmes] + [(s, "serie") for s in series] + [(l, "livro") for l in livros],
+        idioma_tmdb_atual,
+    )
+
     contexto = {
-        "destaques_do_ano": _destaques_do_ano(_idioma_tmdb_atual(request)),
-        "filmes": _com_media(Filme.objects.filter(ano_lancamento__lte=ano_atual)).order_by("-ano_lancamento")[
-            :ITENS_POR_FILEIRA_HOME
-        ],
-        "series": _com_media(Serie.objects.filter(ano_lancamento__lte=ano_atual)).order_by("-ano_lancamento")[
-            :ITENS_POR_FILEIRA_HOME
-        ],
-        "livros": _com_media(Livro.objects.filter(ano_lancamento__lte=ano_atual)).order_by("-ano_lancamento")[
-            :ITENS_POR_FILEIRA_HOME
-        ],
+        "destaques_do_ano": _destaques_do_ano(idioma_tmdb_atual),
+        "filmes": filmes,
+        "series": series,
+        "livros": livros,
     }
     return render(request, "catalog/home.html", contexto)
 
@@ -354,6 +400,11 @@ def lista(request, tipo):
 
     paginator = Paginator(queryset, ITENS_POR_PAGINA)
     pagina = paginator.get_page(request.GET.get("pagina"))
+
+    # Título/sinopse/pôster no idioma da navegação — só pros itens dessa
+    # PÁGINA (a paginação já limita pra ITENS_POR_PAGINA de cada vez, então
+    # isso nunca traduz o catálogo inteiro de uma vez só).
+    _aplicar_exibicao([(item, tipo) for item in pagina], _idioma_tmdb_atual(request))
 
     # Pra trocar de página SEM perder os filtros já escolhidos (busca,
     # gênero, ano, nota mínima) — os links "anterior"/"próxima" do template
@@ -1131,6 +1182,15 @@ def busca(request):
                 if novo:
                     livros.append(novo)
                     titulos_livros.add(novo.titulo.lower())
+
+        # Título/sinopse/pôster no idioma da navegação — vale tanto pros
+        # títulos recém-importados (já vêm nesse idioma, ver _criar_filme_
+        # rapido acima) quanto pros que já existiam no catálogo antes,
+        # cadastrados em outro idioma.
+        _aplicar_exibicao(
+            [(f, "filme") for f in filmes] + [(s, "serie") for s in series] + [(l, "livro") for l in livros],
+            idioma_tmdb,
+        )
 
         resultados = {"filmes": filmes, "series": series, "livros": livros}
 

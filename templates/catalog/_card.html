@@ -4,10 +4,10 @@
     <a href="{% url 'detalhe' tipo item.pk %}" class="text-decoration-none text-reset">
         <div class="card card-titulo shadow-sm">
             <img
-                src="{{ item.poster_url|default:'https://placehold.co/400x600/1f2937/ffffff?text=Sem+imagem' }}"
-                class="poster card-img-top" alt="Pôster de {{ item.titulo }}">
+                src="{{ item.poster_exibicao|default:item.poster_url|default:'https://placehold.co/400x600/1f2937/ffffff?text=Sem+imagem' }}"
+                class="poster card-img-top" alt="Pôster de {{ item.titulo_exibicao|default:item.titulo }}">
             <div class="card-body">
-                <h6 class="card-title mb-1">{{ item.titulo }}</h6>
+                <h6 class="card-title mb-1">{{ item.titulo_exibicao|default:item.titulo }}</h6>
                 <p class="card-text text-muted small mb-1">{{ item.ano_lancamento }}</p>
                 {% if item.media_notas %}
                     <span class="badge bg-warning text-dark nota-badge">⭐ {{ item.media_notas|floatformat:1 }}</span>

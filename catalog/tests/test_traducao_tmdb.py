@@ -121,6 +121,24 @@ class TextoNoIdiomaTest(TestCase):
             self.assertEqual(mock_busca.call_count, 1)
         self.assertEqual(sinopse, "")
 
+    def test_falha_ao_salvar_o_cache_nao_impede_de_mostrar_a_traducao_agora(self):
+        # `_buscar_traducao_agora` é chamada em PARALELO (várias threads ao
+        # mesmo tempo, ver _traduzir_varios) pra páginas com vários títulos
+        # — se salvar o cache no banco falhar num instante (ex: SQLite local
+        # travando por causa de escritas concorrentes; não acontece no
+        # Postgres de produção, mas pode acontecer no dev local), isso NÃO
+        # pode derrubar a página inteira: a pessoa ainda vê a tradução
+        # certa AGORA, só não fica em cache pra próxima vez.
+        resposta_simulada = {"titulo": "Título PT", "sinopse": "Sinopse em português."}
+        with patch("catalog.views.busca_externa.detalhes_filme", return_value=resposta_simulada):
+            with patch(
+                "catalog.models.Filme.save", side_effect=Exception("database is locked")
+            ):
+                titulo, sinopse = views._texto_no_idioma(self.filme, "filme", "pt")
+
+        self.assertEqual(titulo, "Título PT")
+        self.assertIn("Sinopse em português", sinopse)
+
 
 class LimparCacheTraducoesTest(TestCase):
     """O comando `python manage.py limpar_cache_traducoes` (catalog/
