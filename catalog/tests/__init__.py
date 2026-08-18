@@ -71,6 +71,16 @@ Arquivos:
                                   TMDB_API_KEY estar configurada no Render)
                                   — sem ele, esses títulos ficariam pra
                                   sempre sem elenco/onde assistir/trailer.
+- test_completar_dados_pendentes.py → comando que completa (elenco, onde
+                                  assistir, trailer...) títulos que ainda
+                                  nunca foram abertos por ninguém
+                                  (dados_completos=False), direto no
+                                  deploy — sem depender da thread em
+                                  segundo plano sobreviver até o fim no
+                                  ambiente de produção (ver comentário no
+                                  próprio arquivo do comando pra entender
+                                  por que isso é necessário no Render
+                                  gratuito).
 
 Como rodar:
     python manage.py test                        → roda tudo

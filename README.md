@@ -87,7 +87,8 @@ imdb_faculdade/
 │   ├── forms.py, urls.py, admin.py
 │   ├── management/commands/      → seed_data, popular_catalogo, buscar_capas,
 │   │                                buscar_datas_lancamento, limpar_cache_traducoes,
-│   │                                atualizar_onde_assistir, rebuscar_sem_correspondencia
+│   │                                atualizar_onde_assistir, rebuscar_sem_correspondencia,
+│   │                                completar_dados_pendentes
 │   └── tests/                    → suíte de testes automatizados
 ├── templates/                  → HTML (Django templates)
 ├── static/catalog/             → CSS customizado

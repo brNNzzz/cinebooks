@@ -32,6 +32,18 @@ python manage.py buscar_capas || true
 # chave certinha. Seguro rodar toda vez (idempotente).
 python manage.py rebuscar_sem_correspondencia || true
 
+# Completa (elenco, onde assistir, trailer, sinopse maior...) uma leva de
+# títulos que ainda nunca foram abertos por ninguém (dados_completos=False)
+# — normalmente títulos trazidos pelo popular_catalogo, que só grava o
+# básico de propósito. Isso já aconteceria sozinho na primeira visita à
+# página (via thread em segundo plano), mas no plano gratuito do Render o
+# processo pode reiniciar a qualquer momento e derrubar essa thread no meio
+# do caminho, deixando o título travado sem nunca completar. Fazendo aqui,
+# de forma síncrona dentro do próprio deploy, isso não depende de visita
+# nenhuma. Processa só um lote por vez (--limite, padrão 60) pra não
+# estourar o tempo do build; o que sobrar é pego no deploy seguinte.
+python manage.py completar_dados_pendentes || true
+
 # Descarta cache de tradução salvo com o bug antigo (sinopse aparecendo
 # numa língua diferente da escolhida no site). Só mexe em quem ainda está
 # desatualizado, então não desperdiça tempo nos deploys seguintes.
