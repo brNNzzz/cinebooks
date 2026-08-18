@@ -15,6 +15,7 @@ classDiagram
         +titulo: str
         +sinopse: str
         +ano_lancamento: int
+        +data_lancamento: date
         +poster_url: str
         +criado_em: datetime
         +nota_publico: float
@@ -50,6 +51,11 @@ classDiagram
         +object_id: int
     }
 
+    class QueroVer {
+        +criado_em: datetime
+        +object_id: int
+    }
+
     class User {
         <<Django>>
         +username: str
@@ -66,3 +72,6 @@ classDiagram
 
     Avaliacao "0..*" --> "1" User : usuario
     Avaliacao "0..*" ..> Titulo : titulo_avaliado (Generic FK)
+
+    QueroVer "0..*" --> "1" User : usuario
+    QueroVer "0..*" ..> Titulo : titulo_lista (Generic FK)
