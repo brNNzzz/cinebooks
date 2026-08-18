@@ -40,6 +40,12 @@ Arquivos:
                                   ponta a ponta em
                                   test_detalhe_e_avaliacoes.py, junto com
                                   AvaliarTituloFuturoTest.
+- test_popular_catalogo.py     → comando `popular_catalogo` (pré-popula o
+                                  catálogo com títulos populares/bem
+                                  avaliados do TMDB, sem precisar de um
+                                  banco gigante tipo o dump do IMDb) e as
+                                  funções de listagem que ele usa em
+                                  catalog/busca_externa.py.
 
 Como rodar:
     python manage.py test                        → roda tudo

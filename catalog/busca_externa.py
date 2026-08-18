@@ -107,6 +107,27 @@ def _mapa_generos(tipo_tmdb, idioma):
     return mapa_padrao
 
 
+def _resumo_de_item_tmdb(item, mapa_generos):
+    """Converte um item "cru" da API do TMDB (como vem tanto na busca por
+    texto quanto nas listas de populares/mais bem avaliados) num dict
+    resumido — já com tudo que dá pra cadastrar um item completo numa
+    ÚNICA chamada à API, sem precisar buscar detalhes um por um depois
+    (o que seria lento pra buscar/importar vários títulos de uma vez)."""
+    titulo = item.get("title") or item.get("name") or ""
+    data = item.get("release_date") or item.get("first_air_date") or ""
+    poster_path = item.get("poster_path")
+    return {
+        "id": item["id"],
+        "titulo": titulo,
+        "ano": data[:4] if data else "",
+        "data_lancamento": _parse_data(data),
+        "poster_url": f"{TMDB_IMAGE_BASE_URL}{poster_path}" if poster_path else "",
+        "resumo": (item.get("overview") or "")[:180],
+        "sinopse": item.get("overview") or "",
+        "generos": [mapa_generos[g_id] for g_id in item.get("genre_ids") or [] if g_id in mapa_generos],
+    }
+
+
 def buscar_filmes_series(tipo_tmdb, query, idioma=IDIOMA_TMDB_PADRAO):
     """tipo_tmdb é 'movie' ou 'tv'. Devolve uma lista resumida de resultados —
     já com tudo que dá pra cadastrar um item completo, numa ÚNICA chamada à
@@ -119,29 +140,61 @@ def buscar_filmes_series(tipo_tmdb, query, idioma=IDIOMA_TMDB_PADRAO):
     mapa_generos = _mapa_generos(tipo_tmdb, idioma)
     try:
         dados = _tmdb_get(f"/search/{tipo_tmdb}", {"query": query}, idioma=idioma)
-        resultados = []
-        for item in (dados.get("results") or [])[:10]:
-            titulo = item.get("title") or item.get("name") or ""
-            data = item.get("release_date") or item.get("first_air_date") or ""
-            poster_path = item.get("poster_path")
-            resultados.append(
-                {
-                    "id": item["id"],
-                    "titulo": titulo,
-                    "ano": data[:4] if data else "",
-                    "data_lancamento": _parse_data(data),
-                    "poster_url": f"{TMDB_IMAGE_BASE_URL}{poster_path}" if poster_path else "",
-                    "resumo": (item.get("overview") or "")[:180],
-                    "sinopse": item.get("overview") or "",
-                    "generos": [
-                        mapa_generos[g_id] for g_id in item.get("genre_ids") or [] if g_id in mapa_generos
-                    ],
-                }
-            )
-        return resultados
+        return [_resumo_de_item_tmdb(item, mapa_generos) for item in (dados.get("results") or [])[:10]]
     except (requests.RequestException, ValueError, KeyError) as erro:
         logger.warning("Falha ao buscar %r no TMDB: %s", query, erro)
         return []
+
+
+def _listar_tmdb(caminho, tipo_tmdb, idioma=IDIOMA_TMDB_PADRAO, paginas=1):
+    """Busca uma ou mais páginas de uma LISTA pronta do TMDB (ex:
+    "/movie/popular", "/tv/top_rated" — 20 resultados por página) e devolve
+    tudo já no mesmo formato resumido de `buscar_filmes_series`. Usada pelo
+    comando `popular_catalogo` pra pré-popular o catálogo com títulos
+    conhecidos, sem precisar de uma busca por texto pra cada um.
+
+    Diferente da busca por texto (só 1 chamada, no máximo 10 resultados),
+    aqui cada PÁGINA é uma chamada separada — por isso o parâmetro
+    `paginas` existe: pedir só o necessário, nunca mais que isso."""
+    if not tmdb_configurado():
+        return []
+    mapa_generos = _mapa_generos(tipo_tmdb, idioma)
+    resultados = []
+    for pagina in range(1, paginas + 1):
+        try:
+            dados = _tmdb_get(caminho, {"page": pagina}, idioma=idioma)
+        except (requests.RequestException, ValueError, KeyError) as erro:
+            logger.warning("Falha ao listar %r (página %s) no TMDB: %s", caminho, pagina, erro)
+            break
+        itens = dados.get("results") or []
+        if not itens:
+            break
+        resultados.extend(_resumo_de_item_tmdb(item, mapa_generos) for item in itens)
+        if pagina >= (dados.get("total_pages") or 1):
+            break  # já pegamos todas as páginas que existem, não adianta pedir mais
+    return resultados
+
+
+def filmes_populares(idioma=IDIOMA_TMDB_PADRAO, paginas=1):
+    """Os filmes mais populares no TMDB agora (o mesmo critério da home page
+    deles) — bom pra pré-popular o catálogo com títulos que as pessoas
+    realmente conhecem/estão assistindo."""
+    return _listar_tmdb("/movie/popular", "movie", idioma=idioma, paginas=paginas)
+
+
+def filmes_bem_avaliados(idioma=IDIOMA_TMDB_PADRAO, paginas=1):
+    """Os filmes mais bem avaliados de todos os tempos no TMDB — usado
+    JUNTO com `filmes_populares` (não no lugar), pra misturar sucessos do
+    momento com clássicos consagrados."""
+    return _listar_tmdb("/movie/top_rated", "movie", idioma=idioma, paginas=paginas)
+
+
+def series_populares(idioma=IDIOMA_TMDB_PADRAO, paginas=1):
+    return _listar_tmdb("/tv/popular", "tv", idioma=idioma, paginas=paginas)
+
+
+def series_bem_avaliadas(idioma=IDIOMA_TMDB_PADRAO, paginas=1):
+    return _listar_tmdb("/tv/top_rated", "tv", idioma=idioma, paginas=paginas)
 
 
 MAX_ELENCO = 8  # quantos atores/atrizes principais trazer por título

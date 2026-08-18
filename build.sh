@@ -13,6 +13,13 @@ python manage.py migrate
 # Popula o banco com os títulos de exemplo (seguro rodar toda vez, não duplica).
 python manage.py seed_data
 
+# Pré-popula o catálogo com filmes/séries populares do TMDB (~200 títulos),
+# pra o site não parecer vazio antes de alguém buscar algo — sem precisar
+# de um banco gigante tipo o dump do IMDb (que não caberia no plano
+# gratuito). Idempotente (não duplica em deploys seguintes) e, sem
+# TMDB_API_KEY configurada, só avisa e segue sem travar (por isso "|| true").
+python manage.py popular_catalogo || true
+
 # Busca as capas reais (TMDB + Open Library). Se TMDB_API_KEY não estiver
 # configurada ainda, essa etapa simplesmente não encontra nada e segue sem
 # travar o deploy — por isso o "|| true" no final.
