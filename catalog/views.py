@@ -177,6 +177,15 @@ def _destaques_do_ano(idioma_atual=None):
     return {"ano": ano, "itens": itens}
 
 
+
+# Quantos títulos mostrar em cada fileira da home ("Filmes/Séries/Livros
+# recentes"). Os cards ficam pequenos o bastante (ver _card.html) pra
+# caber 6 por linha em telas grandes — 12 dá exatamente 2 linhas cheias
+# nesse caso (e ainda fica bem distribuído nas telas menores: 3 linhas de
+# 4 no tablet, 4 linhas de 3 no celular).
+ITENS_POR_FILEIRA_HOME = 12
+
+
 def home(request):
     # Mesmo cuidado do _destaques_do_ano (ver comentário lá): sem esse
     # filtro, um título anunciado mas que ainda nem lançou (ex: uma
@@ -190,9 +199,15 @@ def home(request):
     ano_atual = timezone.now().year
     contexto = {
         "destaques_do_ano": _destaques_do_ano(_idioma_tmdb_atual(request)),
-        "filmes": _com_media(Filme.objects.filter(ano_lancamento__lte=ano_atual)).order_by("-ano_lancamento")[:4],
-        "series": _com_media(Serie.objects.filter(ano_lancamento__lte=ano_atual)).order_by("-ano_lancamento")[:4],
-        "livros": _com_media(Livro.objects.filter(ano_lancamento__lte=ano_atual)).order_by("-ano_lancamento")[:4],
+        "filmes": _com_media(Filme.objects.filter(ano_lancamento__lte=ano_atual)).order_by("-ano_lancamento")[
+            :ITENS_POR_FILEIRA_HOME
+        ],
+        "series": _com_media(Serie.objects.filter(ano_lancamento__lte=ano_atual)).order_by("-ano_lancamento")[
+            :ITENS_POR_FILEIRA_HOME
+        ],
+        "livros": _com_media(Livro.objects.filter(ano_lancamento__lte=ano_atual)).order_by("-ano_lancamento")[
+            :ITENS_POR_FILEIRA_HOME
+        ],
     }
     return render(request, "catalog/home.html", contexto)
 
