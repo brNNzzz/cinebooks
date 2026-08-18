@@ -65,6 +65,12 @@ Arquivos:
                                   automática de um trailer dublado/legendado
                                   no idioma em que a pessoa está navegando
                                   o site, quando o TMDB tiver um.
+- test_rebuscar_sem_correspondencia.py → comando que destrava títulos que
+                                  nunca acharam correspondência no TMDB (ex:
+                                  a primeira tentativa aconteceu antes da
+                                  TMDB_API_KEY estar configurada no Render)
+                                  — sem ele, esses títulos ficariam pra
+                                  sempre sem elenco/onde assistir/trailer.
 
 Como rodar:
     python manage.py test                        → roda tudo

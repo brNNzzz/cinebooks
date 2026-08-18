@@ -33,6 +33,9 @@ O diagrama de classes completo está em [`docs/diagrama_classes.png`](docs/diagr
 - Listagem de filmes, séries e livros com paginação, busca por título, e filtros combináveis por gênero, ano e nota mínima da comunidade.
 - Busca global (filmes + séries + livros de uma vez), que também consulta as APIs externas em tempo real para títulos ainda não cadastrados.
 - Página de detalhe com sinopse, ficha técnica, elenco (com foto) e todas as avaliações da comunidade.
+- Sinopse mais detalhada quando disponível (via OMDb, `plot=full`), sem misturar idioma: só aplicada quando bate com o idioma original do título, ou guardada como tradução pronta pro inglês.
+- "Onde assistir" (streaming por assinatura, aluguel, compra), vindo do TMDB/JustWatch, atualizado periodicamente a cada deploy.
+- Botão pra assistir o trailer oficial no YouTube, tentando abrir a versão dublada/legendada no idioma em que o site está sendo navegado (com fallback pro idioma original se não houver).
 - Títulos são exibidos apenas até o ano civil atual — uma continuação anunciada com data de lançamento no futuro (ex: um filme previsto para 2030) não aparece no catálogo antes da hora.
 
 **Avaliações**
@@ -83,7 +86,8 @@ imdb_faculdade/
 │   ├── i18n.py                   → dicionário de traduções (11 idiomas)
 │   ├── forms.py, urls.py, admin.py
 │   ├── management/commands/      → seed_data, popular_catalogo, buscar_capas,
-│   │                                buscar_datas_lancamento, limpar_cache_traducoes
+│   │                                buscar_datas_lancamento, limpar_cache_traducoes,
+│   │                                atualizar_onde_assistir, rebuscar_sem_correspondencia
 │   └── tests/                    → suíte de testes automatizados
 ├── templates/                  → HTML (Django templates)
 ├── static/catalog/             → CSS customizado

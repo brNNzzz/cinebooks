@@ -25,6 +25,13 @@ python manage.py popular_catalogo || true
 # travar o deploy — por isso o "|| true" no final.
 python manage.py buscar_capas || true
 
+# Tenta de novo achar no TMDB os títulos que ficaram "travados" sem
+# correspondência (normalmente porque a primeira tentativa aconteceu antes
+# da TMDB_API_KEY estar configurada) — sem isso, esses títulos nunca
+# ganhariam elenco, onde assistir ou trailer, mesmo depois de configurar a
+# chave certinha. Seguro rodar toda vez (idempotente).
+python manage.py rebuscar_sem_correspondencia || true
+
 # Descarta cache de tradução salvo com o bug antigo (sinopse aparecendo
 # numa língua diferente da escolhida no site). Só mexe em quem ainda está
 # desatualizado, então não desperdiça tempo nos deploys seguintes.
