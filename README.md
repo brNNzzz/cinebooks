@@ -36,6 +36,7 @@ O diagrama de classes completo está em [`docs/diagrama_classes.png`](docs/diagr
 - Sinopse mais detalhada quando disponível (via OMDb, `plot=full`), sem misturar idioma: só aplicada quando bate com o idioma original do título, ou guardada como tradução pronta pro inglês.
 - "Onde assistir" (streaming por assinatura, aluguel, compra), vindo do TMDB/JustWatch, atualizado periodicamente a cada deploy.
 - Botão pra assistir o trailer oficial no YouTube, tentando abrir a versão dublada/legendada no idioma em que o site está sendo navegado (com fallback pro idioma original se não houver).
+- A capa (pôster) também troca ao mudar o idioma do site, pra uma versão com o título escrito naquela língua, quando o TMDB tiver uma — igual o próprio site do TMDB faz. Sem uma capa própria pra esse idioma, mantém a capa original de lançamento.
 - Títulos são exibidos apenas até o ano civil atual — uma continuação anunciada com data de lançamento no futuro (ex: um filme previsto para 2030) não aparece no catálogo antes da hora.
 
 **Avaliações**

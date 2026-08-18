@@ -65,6 +65,15 @@ Arquivos:
                                   automática de um trailer dublado/legendado
                                   no idioma em que a pessoa está navegando
                                   o site, quando o TMDB tiver um.
+- test_poster_idioma.py        → troca automática da CAPA (pôster) ao
+                                  trocar o idioma do site, pra uma versão
+                                  com o título escrito naquela língua,
+                                  quando o TMDB tiver uma (mesma ideia do
+                                  site do TMDB) — com fallback pro pôster
+                                  ORIGINAL de lançamento quando não existir
+                                  uma capa própria pra esse idioma. Livro
+                                  nunca troca de capa (Open Library não tem
+                                  esse conceito).
 - test_rebuscar_sem_correspondencia.py → comando que destrava títulos que
                                   nunca acharam correspondência no TMDB (ex:
                                   a primeira tentativa aconteceu antes da

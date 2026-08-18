@@ -11,7 +11,7 @@
                 <div class="carousel-item {% if forloop.first %}active{% endif %}">
                     <div class="d-flex flex-column flex-md-row align-items-center gap-4 p-4 p-md-5">
                         <img
-                            src="{{ item.poster_url|default:'https://placehold.co/300x450/1f2937/ffffff?text=Sem+imagem' }}"
+                            src="{{ item.poster_exibicao|default:item.poster_url|default:'https://placehold.co/300x450/1f2937/ffffff?text=Sem+imagem' }}"
                             class="destaque-poster rounded-3 shadow flex-shrink-0" alt="Pôster de {{ item.titulo_exibicao }}">
                         <div class="text-white destaque-info">
                             <p class="text-uppercase small fw-semibold text-white-50 mb-1">

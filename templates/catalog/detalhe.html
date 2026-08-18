@@ -8,7 +8,7 @@
 
 <div class="row">
     <div class="col-md-3 mb-4">
-        <img src="{{ item.poster_url|default:'https://placehold.co/400x600/1f2937/ffffff?text=Sem+imagem' }}"
+        <img src="{{ item.poster_exibicao|default:item.poster_url|default:'https://placehold.co/400x600/1f2937/ffffff?text=Sem+imagem' }}"
              class="poster" alt="Pôster de {{ item.titulo_exibicao }}">
     </div>
     <div class="col-md-9">

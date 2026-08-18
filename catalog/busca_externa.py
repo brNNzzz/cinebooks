@@ -316,6 +316,26 @@ def _extrair_trailer_youtube(dados, idioma=IDIOMA_TMDB_PADRAO):
     return f"https://www.youtube.com/watch?v={escolhido['key']}"
 
 
+def _extrair_poster_no_idioma(dados, idioma):
+    """Escolhe, dentre TODOS os pôsteres cadastrados desse título no TMDB, um
+    que tenha o texto (nome/logotipo) no idioma pedido — é assim que o
+    próprio site do TMDB troca a capa ao trocar de idioma: cada mercado
+    costuma ter uma arte de capa própria, com o título escrito na língua
+    local, em vez de só traduzir o mesmo pôster.
+
+    Devolve "" se não existir NENHUM pôster marcado nesse idioma específico
+    — quem chama (`_poster_no_idioma`, em views.py) cai de volta pro pôster
+    original de lançamento nesse caso, em vez de mostrar algo genérico."""
+    idioma_curto = (idioma or IDIOMA_TMDB_PADRAO).split("-")[0]
+    posteres = (dados.get("images") or {}).get("posters") or []
+    for poster in posteres:
+        if poster.get("iso_639_1") == idioma_curto:
+            caminho = poster.get("file_path")
+            if caminho:
+                return f"{TMDB_IMAGE_BASE_URL}{caminho}"
+    return ""
+
+
 def detalhes_filme(tmdb_id, idioma=IDIOMA_TMDB_PADRAO):
     """Devolve um dict com os dados completos do filme (inclusive elenco),
     ou None se a busca falhar."""
@@ -323,7 +343,7 @@ def detalhes_filme(tmdb_id, idioma=IDIOMA_TMDB_PADRAO):
         dados = _tmdb_get(
             f"/movie/{tmdb_id}",
             {
-                "append_to_response": "credits,external_ids,watch/providers,videos",
+                "append_to_response": "credits,external_ids,watch/providers,videos,images",
                 # Amplia a busca de vídeos além do idioma da página: o TMDB,
                 # por padrão, só devolve vídeo (trailer) que bate exatamente
                 # com o idioma pedido — e a maioria dos trailers cadastrados
@@ -331,6 +351,12 @@ def detalhes_filme(tmdb_id, idioma=IDIOMA_TMDB_PADRAO):
                 # gente perderia trailer pra quase todo título navegado em
                 # português. "null" pega os vídeos sem idioma marcado.
                 "include_video_language": f"{(idioma or IDIOMA_TMDB_PADRAO).split('-')[0]},en,null",
+                # Mesma ideia, mas pra pôsteres: sem isso o TMDB só devolve
+                # imagem no idioma "padrão" configurado no `language=` acima
+                # — pedindo explicitamente o idioma da página aqui, a gente
+                # consegue o pôster "local" desse mercado, se existir (ver
+                # _extrair_poster_no_idioma).
+                "include_image_language": f"{(idioma or IDIOMA_TMDB_PADRAO).split('-')[0]},null",
             },
             idioma=idioma,
         )
@@ -367,6 +393,11 @@ def detalhes_filme(tmdb_id, idioma=IDIOMA_TMDB_PADRAO):
         "onde_assistir": _extrair_onde_assistir(dados),
         # Trailer no YouTube — idem, vem de graça (append_to_response=videos).
         "trailer_youtube_url": _extrair_trailer_youtube(dados, idioma=idioma),
+        # Pôster "local" desse idioma, se existir (append_to_response=images)
+        # — "" quando o TMDB não tem nenhum pôster marcado nesse idioma, e
+        # quem usa isso cai de volta pro pôster original de lançamento nesse
+        # caso (ver _poster_no_idioma em views.py).
+        "poster_no_idioma": _extrair_poster_no_idioma(dados, idioma),
     }
 
 
@@ -377,8 +408,9 @@ def detalhes_serie(tmdb_id, idioma=IDIOMA_TMDB_PADRAO):
         dados = _tmdb_get(
             f"/tv/{tmdb_id}",
             {
-                "append_to_response": "credits,external_ids,watch/providers,videos",
+                "append_to_response": "credits,external_ids,watch/providers,videos,images",
                 "include_video_language": f"{(idioma or IDIOMA_TMDB_PADRAO).split('-')[0]},en,null",
+                "include_image_language": f"{(idioma or IDIOMA_TMDB_PADRAO).split('-')[0]},null",
             },
             idioma=idioma,
         )
@@ -403,6 +435,7 @@ def detalhes_serie(tmdb_id, idioma=IDIOMA_TMDB_PADRAO):
         "imdb_id": (dados.get("external_ids") or {}).get("imdb_id") or "",
         "onde_assistir": _extrair_onde_assistir(dados),
         "trailer_youtube_url": _extrair_trailer_youtube(dados, idioma=idioma),
+        "poster_no_idioma": _extrair_poster_no_idioma(dados, idioma),
     }
 
 
