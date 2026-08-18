@@ -169,7 +169,6 @@ TRADUCOES = {
         "onde_assistir_aluguel": "Alugar",
         "onde_assistir_compra": "Comprar",
         "onde_assistir_indisponivel": "Ainda não temos informação de onde assistir esse título.",
-        "onde_assistir_atribuicao": "Dados de disponibilidade fornecidos por JustWatch.",
     },
     "en": {
         "nav_filmes": "Movies",
@@ -297,7 +296,6 @@ TRADUCOES = {
         "onde_assistir_aluguel": "Rent",
         "onde_assistir_compra": "Buy",
         "onde_assistir_indisponivel": "We don't have where-to-watch information for this title yet.",
-        "onde_assistir_atribuicao": "Availability data provided by JustWatch.",
     },
     "es": {
         "nav_filmes": "Películas",
@@ -425,7 +423,6 @@ TRADUCOES = {
         "onde_assistir_aluguel": "Alquilar",
         "onde_assistir_compra": "Comprar",
         "onde_assistir_indisponivel": "Aún no tenemos información de dónde ver este título.",
-        "onde_assistir_atribuicao": "Datos de disponibilidad proporcionados por JustWatch.",
     },
     "fr": {
         "nav_filmes": "Films",
@@ -553,7 +550,6 @@ TRADUCOES = {
         "onde_assistir_aluguel": "Louer",
         "onde_assistir_compra": "Acheter",
         "onde_assistir_indisponivel": "Nous n'avons pas encore d'information sur où regarder ce titre.",
-        "onde_assistir_atribuicao": "Données de disponibilité fournies par JustWatch.",
     },
     "ru": {
         "nav_filmes": "Фильмы",
@@ -681,7 +677,6 @@ TRADUCOES = {
         "onde_assistir_aluguel": "Взять напрокат",
         "onde_assistir_compra": "Купить",
         "onde_assistir_indisponivel": "У нас пока нет информации о том, где посмотреть это название.",
-        "onde_assistir_atribuicao": "Данные о доступности предоставлены JustWatch.",
     },
     "zh": {
         "nav_filmes": "电影",
@@ -809,7 +804,6 @@ TRADUCOES = {
         "onde_assistir_aluguel": "租赁",
         "onde_assistir_compra": "购买",
         "onde_assistir_indisponivel": "我们目前还没有该作品的观看渠道信息。",
-        "onde_assistir_atribuicao": "可用性数据由 JustWatch 提供。",
     },
     "hi": {
         "nav_filmes": "फ़िल्में",
@@ -937,7 +931,6 @@ TRADUCOES = {
         "onde_assistir_aluguel": "किराए पर लें",
         "onde_assistir_compra": "खरीदें",
         "onde_assistir_indisponivel": "इस टाइटल को कहाँ देखें, इसकी जानकारी अभी हमारे पास नहीं है।",
-        "onde_assistir_atribuicao": "उपलब्धता डेटा JustWatch द्वारा प्रदान किया गया है।",
     },
     "ar": {
         "nav_filmes": "أفلام",
@@ -1065,7 +1058,6 @@ TRADUCOES = {
         "onde_assistir_aluguel": "استئجار",
         "onde_assistir_compra": "شراء",
         "onde_assistir_indisponivel": "ليس لدينا بعد معلومات عن مكان مشاهدة هذا العنوان.",
-        "onde_assistir_atribuicao": "بيانات التوفر مقدَّمة من JustWatch.",
     },
     "bn": {
         "nav_filmes": "চলচ্চিত্র",
@@ -1193,7 +1185,6 @@ TRADUCOES = {
         "onde_assistir_aluguel": "ভাড়া নিন",
         "onde_assistir_compra": "কিনুন",
         "onde_assistir_indisponivel": "এই শিরোনামটি কোথায় দেখা যাবে, তার তথ্য আমাদের কাছে এখনও নেই।",
-        "onde_assistir_atribuicao": "প্রাপ্যতার তথ্য সরবরাহ করেছে JustWatch।",
     },
     "ur": {
         "nav_filmes": "فلمیں",
@@ -1321,7 +1312,6 @@ TRADUCOES = {
         "onde_assistir_aluguel": "کرائے پر لیں",
         "onde_assistir_compra": "خریدیں",
         "onde_assistir_indisponivel": "ابھی ہمارے پاس اس ٹائٹل کو کہاں دیکھا جائے، اس کی معلومات موجود نہیں ہیں۔",
-        "onde_assistir_atribuicao": "دستیابی کا ڈیٹا JustWatch کی طرف سے فراہم کیا گیا ہے۔",
     },
     "id": {
         "nav_filmes": "Film",
@@ -1449,7 +1439,6 @@ TRADUCOES = {
         "onde_assistir_aluguel": "Sewa",
         "onde_assistir_compra": "Beli",
         "onde_assistir_indisponivel": "Kami belum punya informasi tempat menonton judul ini.",
-        "onde_assistir_atribuicao": "Data ketersediaan disediakan oleh JustWatch.",
     },
 }
 

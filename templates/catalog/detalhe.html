@@ -87,10 +87,7 @@
             <p class="text-muted small mb-1">{% t "onde_assistir_streaming" %}</p>
             <div class="d-flex flex-wrap gap-2 mb-3">
                 {% for provedor in item.onde_assistir.streaming %}
-                    <span class="d-inline-flex align-items-center gap-1 border rounded px-2 py-1">
-                        {% if provedor.logo_url %}<img src="{{ provedor.logo_url }}" alt="" style="width:24px;height:24px;border-radius:4px;">{% endif %}
-                        <span class="small">{{ provedor.nome }}</span>
-                    </span>
+                    {% include "catalog/_provedor_badge.html" %}
                 {% endfor %}
             </div>
         {% endif %}
@@ -99,10 +96,7 @@
             <p class="text-muted small mb-1">{% t "onde_assistir_aluguel" %}</p>
             <div class="d-flex flex-wrap gap-2 mb-3">
                 {% for provedor in item.onde_assistir.aluguel %}
-                    <span class="d-inline-flex align-items-center gap-1 border rounded px-2 py-1">
-                        {% if provedor.logo_url %}<img src="{{ provedor.logo_url }}" alt="" style="width:24px;height:24px;border-radius:4px;">{% endif %}
-                        <span class="small">{{ provedor.nome }}</span>
-                    </span>
+                    {% include "catalog/_provedor_badge.html" %}
                 {% endfor %}
             </div>
         {% endif %}
@@ -111,20 +105,10 @@
             <p class="text-muted small mb-1">{% t "onde_assistir_compra" %}</p>
             <div class="d-flex flex-wrap gap-2 mb-3">
                 {% for provedor in item.onde_assistir.compra %}
-                    <span class="d-inline-flex align-items-center gap-1 border rounded px-2 py-1">
-                        {% if provedor.logo_url %}<img src="{{ provedor.logo_url }}" alt="" style="width:24px;height:24px;border-radius:4px;">{% endif %}
-                        <span class="small">{{ provedor.nome }}</span>
-                    </span>
+                    {% include "catalog/_provedor_badge.html" %}
                 {% endfor %}
             </div>
         {% endif %}
-
-        <p class="text-muted" style="font-size:0.75rem;">
-            {% t "onde_assistir_atribuicao" %}
-            {% if item.onde_assistir.link %}
-                <a href="{{ item.onde_assistir.link }}" target="_blank" rel="noopener">JustWatch</a>
-            {% endif %}
-        </p>
     {% endif %}
 
     {% if item.elenco.all %}

@@ -1,0 +1,25 @@
+{% comment %}
+Um "selo" clicável de serviço de streaming (Netflix, Prime Video...), usado
+nas 3 categorias de "onde assistir" (streaming/aluguel/compra) da página de
+detalhe. Espera duas variáveis do contexto que o chamam (via {% include %}):
+`provedor` (dict com "nome"/"logo_url") e `item` (o filme/série, já
+disponível automaticamente por já estar no contexto da página).
+
+O TMDB/JustWatch só devolvem UM link por título (não um link por serviço
+individual) — não tem como saber a URL exata "abrir esse filme direto na
+Netflix", só a página com a lista de onde está disponível. Por isso todo
+selo aponta pro mesmo `item.onde_assistir.link`; clicar em qualquer um leva
+pra essa página, de onde dá pra escolher o serviço.
+{% endcomment %}
+{% if item.onde_assistir.link %}
+    <a href="{{ item.onde_assistir.link }}" target="_blank" rel="noopener"
+       class="d-inline-flex align-items-center gap-1 border rounded px-2 py-1 text-decoration-none text-reset provedor-badge">
+        {% if provedor.logo_url %}<img src="{{ provedor.logo_url }}" alt="" style="width:24px;height:24px;border-radius:4px;">{% endif %}
+        <span class="small">{{ provedor.nome }}</span>
+    </a>
+{% else %}
+    <span class="d-inline-flex align-items-center gap-1 border rounded px-2 py-1">
+        {% if provedor.logo_url %}<img src="{{ provedor.logo_url }}" alt="" style="width:24px;height:24px;border-radius:4px;">{% endif %}
+        <span class="small">{{ provedor.nome }}</span>
+    </span>
+{% endif %}
