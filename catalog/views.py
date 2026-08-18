@@ -208,7 +208,15 @@ def lista(request, tipo):
     if info is None:
         raise Http404("Categoria não encontrada")
     idioma_atual = _idioma_atual(request)
-    queryset = _com_media(info["model"].objects.all())
+    ano_atual = timezone.now().year
+
+    # Mesma regra da home (ver views.home): não faz sentido o catálogo
+    # mostrar uma "continuação anunciada" com ano de lançamento lá no
+    # futuro (ex: "Avatar 5", cadastrado com ano_lancamento=2034) — só
+    # entra quem já lançou ou lança até o fim do ano civil atual. Aplicado
+    # aqui na consulta BASE (antes de qualquer outro filtro) pra também
+    # não aparecer nas abas "Filmes"/"Séries"/"Livros", não só na home.
+    queryset = _com_media(info["model"].objects.filter(ano_lancamento__lte=ano_atual))
 
     termo = request.GET.get("q", "").strip()
     if termo:
@@ -222,9 +230,13 @@ def lista(request, tipo):
     # o <select> de ano — calculada ANTES de aplicar o filtro de ano em si
     # (senão, depois de escolher um ano, o dropdown ficaria só com aquela
     # opção, sem jeito de voltar pra "todos os anos" olhando as outras).
+    # Também limitada até o ano atual, pelo mesmo motivo acima: sem isso, o
+    # <select> ofereceria anos "fantasma" (tipo 2034) que nem aparecem na
+    # lista, então escolher esse ano só mostraria uma página vazia.
     anos_disponiveis = list(
         info["model"]
-        .objects.order_by("-ano_lancamento")
+        .objects.filter(ano_lancamento__lte=ano_atual)
+        .order_by("-ano_lancamento")
         .values_list("ano_lancamento", flat=True)
         .distinct()
     )

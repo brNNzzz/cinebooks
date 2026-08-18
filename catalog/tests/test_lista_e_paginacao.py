@@ -4,9 +4,15 @@ busca por texto, filtro de gênero/ano/nota mínima, e a paginação. Essa é a
 página que mais mudou na "polida de experiência" pedida — antes ela
 carregava TODOS os títulos de uma vez numa lista só, sem filtro de ano nem
 de nota, e sem paginação nenhuma.
+
+Ver também ListaNaoMostraTituloFuturoTest mais abaixo: a mesma regra de
+"não mostrar título com ano no futuro" que já valia na home (test_home.py)
+precisou ser replicada aqui, porque a listagem usa sua própria consulta ao
+banco (não reaproveita a de home()).
 """
 
 from django.test import Client, TestCase
+from django.utils import timezone
 
 from catalog.models import Avaliacao, Genero
 from catalog.tests.fabricas import criar_filme, criar_usuario
@@ -115,6 +121,58 @@ class ListaBuscaEFiltrosTest(TestCase):
         resposta = self.client.get(f"/filme/?genero={self.acao.pk}&ano=2020&nota_minima=4")
         self.assertContains(resposta, "Filme Certo")
         self.assertNotContains(resposta, "Filme Ano Errado")
+
+
+class ListaNaoMostraTituloFuturoTest(TestCase):
+    """A mesma regra já aplicada na home (ver test_home.py) — não mostrar
+    título com ano de lançamento no FUTURO (ex: "Avatar 5", anunciado pra
+    2034) — precisa valer TAMBÉM na aba "Filmes"/"Séries"/"Livros" (a
+    página de listagem completa do catálogo, não só a home). Reportado
+    pelo grupo depois de reparar que, mesmo já escondido da home, o título
+    continuava aparecendo ao clicar em "Filmes" no menu."""
+
+    def setUp(self):
+        self.client = Client()
+        self.ano_atual = timezone.now().year
+
+    def test_titulo_futuro_nao_aparece_na_lista_de_filmes(self):
+        futuro = criar_filme(titulo="Avatar 5", ano=self.ano_atual + 8)
+        lancado = criar_filme(titulo="Filme Já Lançado", ano=self.ano_atual)
+
+        resposta = self.client.get("/filme/")
+
+        self.assertNotContains(resposta, "Avatar 5")
+        self.assertContains(resposta, "Filme Já Lançado")
+        self.assertNotIn(futuro, list(resposta.context["itens"]))
+        self.assertIn(lancado, list(resposta.context["itens"]))
+
+    def test_titulo_lancado_no_ano_atual_continua_aparecendo_na_lista(self):
+        # Não pode "passar do ponto": um lançamento DESTE ano não é
+        # "futuro", tem que continuar aparecendo normalmente na listagem.
+        deste_ano = criar_filme(titulo="Lançamento Deste Ano", ano=self.ano_atual)
+        resposta = self.client.get("/filme/")
+        self.assertIn(deste_ano, list(resposta.context["itens"]))
+
+    def test_ano_futuro_nao_aparece_como_opcao_no_filtro_de_ano(self):
+        # O <select> de anos (anos_disponiveis, ver views.lista) também não
+        # pode oferecer um ano "fantasma" (2034) que nem aparece na lista —
+        # escolher esse ano só devolveria uma página vazia sem explicação.
+        criar_filme(titulo="Avatar 5", ano=self.ano_atual + 8)
+        criar_filme(titulo="Filme Deste Ano", ano=self.ano_atual)
+
+        resposta = self.client.get("/filme/")
+
+        self.assertIn(self.ano_atual, resposta.context["anos_disponiveis"])
+        self.assertNotIn(self.ano_atual + 8, resposta.context["anos_disponiveis"])
+
+    def test_filtro_por_ano_futuro_direto_na_url_nao_devolve_nada(self):
+        # Mesmo que alguém edite a URL na mão (ex: "?ano=2034"), contornando
+        # o <select>, a view não pode devolver o título futuro — a proteção
+        # está na consulta base, não só na lista de opções do filtro.
+        criar_filme(titulo="Avatar 5", ano=self.ano_atual + 8)
+        resposta = self.client.get(f"/filme/?ano={self.ano_atual + 8}")
+        self.assertNotContains(resposta, "Avatar 5")
+        self.assertEqual(list(resposta.context["itens"]), [])
 
 
 class ListaPaginacaoTest(TestCase):
