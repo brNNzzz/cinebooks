@@ -31,6 +31,15 @@ Arquivos:
                                   lançamento no FUTURO (ex: uma continuação
                                   só anunciada, tipo "Avatar 5") aparecia
                                   nas fileiras "recentes" da home.
+- test_data_lancamento.py      → precisão de DIA (não só ano) no "já foi
+                                  lançado?" (campo `data_lancamento`,
+                                  função `views._titulo_ja_lancado`, e o
+                                  comando `buscar_datas_lancamento`) — o
+                                  caso do título "deste ano" mas ainda não
+                                  lançado (ex: "Doomsday") é testado de
+                                  ponta a ponta em
+                                  test_detalhe_e_avaliacoes.py, junto com
+                                  AvaliarTituloFuturoTest.
 
 Como rodar:
     python manage.py test                        → roda tudo

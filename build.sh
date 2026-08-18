@@ -23,6 +23,13 @@ python manage.py buscar_capas || true
 # desatualizado, então não desperdiça tempo nos deploys seguintes.
 python manage.py limpar_cache_traducoes || true
 
+# Preenche a data exata de lançamento (dia/mês/ano) de filmes/séries
+# cadastrados antes desse campo existir — necessário pra regra "só avalia
+# quem já lançou" funcionar com precisão de dia, não só de ano. Sem
+# TMDB_API_KEY configurada, não faz nada e segue o deploy (por isso o
+# "|| true"); já preenchidos, não busca de novo.
+python manage.py buscar_datas_lancamento || true
+
 # Cria o usuário administrador automaticamente, usando as variáveis de
 # ambiente DJANGO_SUPERUSER_USERNAME / _EMAIL / _PASSWORD, se elas estiverem
 # configuradas no painel do Render. Se o usuário já existir, o comando dá

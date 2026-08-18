@@ -16,6 +16,8 @@ títulos de teste já com `dados_completos=True`, o que faz a view pular essa
 etapa de vez.
 """
 
+import datetime
+
 from django.test import Client, TestCase
 from django.utils import timezone
 
@@ -116,10 +118,13 @@ class AvaliarTest(TestCase):
 
 class AvaliarTituloFuturoTest(TestCase):
     """Regra pedida pelo grupo: só dá pra avaliar títulos que JÁ foram
-    lançados (ano_lancamento até o ano atual) — não faz sentido dar nota
-    pra uma continuação anunciada que ainda nem saiu. Ver o mesmo cuidado
-    em catalog/tests/test_home.py (títulos futuros também não aparecem nas
-    fileiras "recentes" da home)."""
+    lançados — não faz sentido dar nota pra uma continuação anunciada que
+    ainda nem saiu. Esses testes cobrem o caso "fácil", em que nem o ANO
+    já chegou (sem precisar de `data_lancamento` pra saber que não rolou
+    ainda). Ver `AvaliarTituloComDataFuturaNoMesmoAnoTest` logo abaixo pro
+    caso mais sutil (título "deste ano", mas que ainda não lançou de
+    verdade), e o mesmo cuidado em catalog/tests/test_home.py (títulos
+    futuros também não aparecem nas fileiras "recentes" da home)."""
 
     def setUp(self):
         self.client = Client()
@@ -166,6 +171,94 @@ class AvaliarTituloFuturoTest(TestCase):
             f"/filme/{filme_deste_ano.pk}/avaliar/", {"nota": 4, "comentario": "Gostei"}
         )
         self.assertRedirects(resposta, f"/filme/{filme_deste_ano.pk}/")
+        self.assertEqual(Avaliacao.objects.filter(usuario=self.usuario).count(), 1)
+
+
+class AvaliarTituloComDataFuturaNoMesmoAnoTest(TestCase):
+    """Caso relatado pelo grupo (exemplo dado: "Doomsday"): um título pode
+    ter `ano_lancamento` igual ao ano ATUAL e mesmo assim ainda não ter
+    saído de verdade (ex: previsto pra dezembro, visto em agosto). Só olhar
+    pro ANO (como o `AvaliarTituloFuturoTest` acima) não pega esse caso —
+    "esse ano" não é a mesma coisa que "já lançou". Por isso, quando temos a
+    data EXATA (`data_lancamento`, vinda do TMDB — ver
+    catalog/busca_externa.py), a checagem usa ela em vez do ano (ver
+    `views._titulo_ja_lancado`).
+
+    IMPORTANTE: diferente do título com ANO no futuro (que nem aparece na
+    home — ver test_home.py), um título "deste ano" mas ainda não lançado
+    CONTINUA aparecendo/navegável no site normalmente — só a AVALIAÇÃO é
+    que fica bloqueada até a data chegar. É por isso que esses testes nunca
+    checam se o filme sai da lista/home, só se dá pra avaliar."""
+
+    def setUp(self):
+        self.client = Client()
+        self.hoje = timezone.localdate()
+        # Monta uma data no futuro que, no dia a dia, cai no MESMO ano
+        # atual (reproduzindo o exemplo do "Doomsday" — lançamento previsto
+        # pra mais tarde neste ano). No raríssimo caso de o teste rodar em
+        # 31/12, usa uma data no ano seguinte — o que importa pro teste é
+        # só que a data esteja no futuro, não em que ano ela cai.
+        if self.hoje.month == 12 and self.hoje.day == 31:
+            self.data_futura = datetime.date(self.hoje.year + 1, 1, 15)
+        else:
+            self.data_futura = datetime.date(self.hoje.year, 12, 31)
+
+        self.filme_deste_ano_nao_lancado = criar_filme(
+            titulo="Doomsday",
+            ano=self.data_futura.year,
+            data_lancamento=self.data_futura,
+            dados_completos=True,
+        )
+        self.usuario = criar_usuario()
+        self.client.login(username=self.usuario.username, password="senha-forte-123")
+
+    def test_titulo_deste_ano_mas_ainda_nao_lancado_nao_mostra_formulario(self):
+        resposta = self.client.get(f"/filme/{self.filme_deste_ano_nao_lancado.pk}/")
+        self.assertFalse(resposta.context["ja_lancado"])
+        self.assertNotContains(resposta, 'name="nota"')
+        self.assertContains(
+            resposta, "Esse título ainda não foi lançado — você poderá avaliar assim que ele sair."
+        )
+
+    def test_titulo_deste_ano_mas_ainda_nao_lancado_bloqueia_post_direto(self):
+        resposta = self.client.post(
+            f"/filme/{self.filme_deste_ano_nao_lancado.pk}/avaliar/",
+            {"nota": 5, "comentario": "Contornando a interface"},
+        )
+        self.assertRedirects(resposta, f"/filme/{self.filme_deste_ano_nao_lancado.pk}/")
+        self.assertEqual(Avaliacao.objects.count(), 0)
+
+    def test_titulo_com_data_de_lancamento_ja_passada_pode_ser_avaliado(self):
+        # O outro lado da mesma regra: se `data_lancamento` já passou (nem
+        # que tenha sido ontem), a avaliação é permitida normalmente — a
+        # precisão de dia vale nos dois sentidos, não só pra bloquear.
+        ja_lancado = criar_filme(
+            titulo="Filme Lançado Ontem",
+            ano=self.hoje.year,
+            data_lancamento=self.hoje - datetime.timedelta(days=1),
+            dados_completos=True,
+        )
+        resposta = self.client.post(
+            f"/filme/{ja_lancado.pk}/avaliar/", {"nota": 4, "comentario": "Peguei estreia"}
+        )
+        self.assertRedirects(resposta, f"/filme/{ja_lancado.pk}/")
+        self.assertEqual(Avaliacao.objects.filter(usuario=self.usuario).count(), 1)
+
+    def test_sem_data_de_lancamento_cadastrada_cai_de_volta_pro_ano(self):
+        # Título "legado" (cadastrado antes desse campo existir) ou um
+        # livro (Open Library só informa o ano) não tem `data_lancamento` —
+        # nesse caso, a regra volta a ser só por ano, igual antes dessa
+        # melhoria (comportamento coberto também em AvaliarTituloFuturoTest).
+        sem_data_exata = criar_filme(
+            titulo="Filme Cadastrado Antes Desse Campo Existir",
+            ano=self.hoje.year,
+            data_lancamento=None,
+            dados_completos=True,
+        )
+        resposta = self.client.post(
+            f"/filme/{sem_data_exata.pk}/avaliar/", {"nota": 3, "comentario": "Sem data exata"}
+        )
+        self.assertRedirects(resposta, f"/filme/{sem_data_exata.pk}/")
         self.assertEqual(Avaliacao.objects.filter(usuario=self.usuario).count(), 1)
 
 

@@ -56,6 +56,18 @@ class Titulo(models.Model):
     titulo = models.CharField("título", max_length=200)
     sinopse = models.TextField("sinopse", blank=True)
     ano_lancamento = models.PositiveIntegerField("ano de lançamento")
+    # Data EXATA de lançamento (dia/mês/ano), quando a API externa souber
+    # informar — o TMDB devolve isso pra filme/série (campo "release_date"/
+    # "first_air_date"), mas o Open Library só sabe o ano dos livros, então
+    # fica None nesse caso. Guardado à parte de `ano_lancamento` (que
+    # continua existindo e sendo usado pra ordenar/filtrar o catálogo) só
+    # pra decidir com precisão se um título JÁ saiu ou não — necessário
+    # porque um título pode ter `ano_lancamento` igual ao ano atual mas
+    # ainda não ter sido lançado de verdade (ex: um filme anunciado pra
+    # dezembro, visto em agosto do mesmo ano: aparece no catálogo, mas
+    # ninguém deveria conseguir avaliar antes de existir de verdade). Ver
+    # `views._titulo_ja_lancado`.
+    data_lancamento = models.DateField("data de lançamento", null=True, blank=True)
     poster_url = models.URLField(
         "URL do pôster/capa",
         blank=True,

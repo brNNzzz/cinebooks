@@ -11,6 +11,7 @@ parciais) para nunca travar a página de importação.
 """
 
 import logging
+from datetime import date
 
 import requests
 from django.conf import settings
@@ -50,6 +51,19 @@ _CACHE_GENEROS = {}
 
 def tmdb_configurado():
     return bool(getattr(settings, "TMDB_API_KEY", ""))
+
+
+def _parse_data(data_str):
+    """Converte uma data no formato do TMDB ("AAAA-MM-DD") num `date` do
+    Python. Devolve None se vier vazia ou num formato inesperado — mais
+    seguro que deixar um erro estourar por causa de um dado malformado que
+    vier de uma API externa (fora do nosso controle)."""
+    if not data_str:
+        return None
+    try:
+        return date.fromisoformat(data_str)
+    except ValueError:
+        return None
 
 
 def _tmdb_get(caminho, parametros_extra=None, idioma=IDIOMA_TMDB_PADRAO):
@@ -115,6 +129,7 @@ def buscar_filmes_series(tipo_tmdb, query, idioma=IDIOMA_TMDB_PADRAO):
                     "id": item["id"],
                     "titulo": titulo,
                     "ano": data[:4] if data else "",
+                    "data_lancamento": _parse_data(data),
                     "poster_url": f"{TMDB_IMAGE_BASE_URL}{poster_path}" if poster_path else "",
                     "resumo": (item.get("overview") or "")[:180],
                     "sinopse": item.get("overview") or "",
@@ -162,10 +177,12 @@ def detalhes_filme(tmdb_id, idioma=IDIOMA_TMDB_PADRAO):
             diretor = pessoa.get("name", "")
             break
     poster_path = dados.get("poster_path")
-    ano = (dados.get("release_date") or "")[:4]
+    data_lancamento_str = dados.get("release_date") or ""
+    ano = data_lancamento_str[:4]
     return {
         "titulo": dados.get("title") or "",
         "ano_lancamento": int(ano) if ano else None,
+        "data_lancamento": _parse_data(data_lancamento_str),
         "sinopse": dados.get("overview") or "",
         "diretor": diretor,
         "duracao_minutos": dados.get("runtime") or None,
@@ -194,10 +211,12 @@ def detalhes_serie(tmdb_id, idioma=IDIOMA_TMDB_PADRAO):
 
     criadores = dados.get("created_by") or []
     poster_path = dados.get("poster_path")
-    ano = (dados.get("first_air_date") or "")[:4]
+    data_lancamento_str = dados.get("first_air_date") or ""
+    ano = data_lancamento_str[:4]
     return {
         "titulo": dados.get("name") or "",
         "ano_lancamento": int(ano) if ano else None,
+        "data_lancamento": _parse_data(data_lancamento_str),
         "sinopse": dados.get("overview") or "",
         "criador": ", ".join(c.get("name", "") for c in criadores),
         "numero_temporadas": dados.get("number_of_seasons") or None,

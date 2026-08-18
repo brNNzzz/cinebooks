@@ -331,6 +331,23 @@ def _completar_em_segundo_plano(pk, model, tipo):
             _COMPLETANDO_AGORA.discard(chave)
 
 
+def _titulo_ja_lancado(item):
+    """Verifica se um título já foi lançado de verdade — usado pra decidir
+    se dá pra avaliar (ver `detalhe` e `avaliar` logo abaixo).
+
+    Sempre que tivermos a data exata (`data_lancamento`, vinda do TMDB pra
+    filme/série), comparamos DIA a dia: um título com `ano_lancamento`
+    igual ao ano atual mas que só lança daqui a alguns meses (ex: um filme
+    anunciado pra dezembro, visto em agosto) ainda NÃO está lançado, mesmo
+    sendo "deste ano". Sem essa data exata (livros, cujo Open Library só
+    informa o ano, ou títulos antigos cadastrados antes desse campo
+    existir), caímos de volta pra comparação por ano — a mesma regra de
+    antes, só um pouco menos precisa."""
+    if item.data_lancamento:
+        return item.data_lancamento <= timezone.localdate()
+    return item.ano_lancamento <= timezone.now().year
+
+
 def detalhe(request, tipo, pk):
     info = TIPOS.get(tipo)
     if info is None:
@@ -389,11 +406,13 @@ def detalhe(request, tipo, pk):
         # Controla se o formulário de avaliação aparece ou não (ver
         # templates/catalog/detalhe.html) — não faz sentido deixar avaliar
         # um título que ainda nem foi lançado (ex: uma continuação só
-        # anunciada, com ano de lançamento no futuro). A view `avaliar`
-        # também confere isso de novo antes de salvar, então mesmo que
-        # alguém envie o formulário contornando essa checagem visual, a
-        # avaliação não é salva (ver comentário lá).
-        "ja_lancado": item.ano_lancamento <= timezone.now().year,
+        # anunciada, ou um título deste ano que só sai daqui a alguns
+        # meses — ver `_titulo_ja_lancado`). A view `avaliar` também
+        # confere isso de novo antes de salvar, então mesmo que alguém
+        # envie o formulário contornando essa checagem visual, a avaliação
+        # não é salva (ver comentário lá). O título continua aparecendo e
+        # sendo navegável normalmente — só a avaliação fica bloqueada.
+        "ja_lancado": _titulo_ja_lancado(item),
     }
     return render(request, "catalog/detalhe.html", contexto)
 
@@ -441,13 +460,16 @@ def avaliar(request, tipo, pk):
 
     idioma_atual = _idioma_atual(request)
 
-    # Não dá pra avaliar um título que ainda nem foi lançado (ex: uma
-    # continuação anunciada, cadastrada com ano de lançamento no futuro —
-    # ver também o mesmo cuidado em views.home). O formulário já fica
-    # escondido nesse caso (ver templates/catalog/detalhe.html), mas essa
-    # checagem aqui é o que realmente IMPEDE, caso alguém envie o POST
-    # direto (contornando a interface).
-    if item.ano_lancamento > timezone.now().year:
+    # Não dá pra avaliar um título que ainda nem foi lançado de verdade —
+    # nem uma continuação anunciada pro futuro, nem um título "deste ano"
+    # que só sai daqui a alguns meses (ver `_titulo_ja_lancado`; e o mesmo
+    # cuidado em views.home, que continua limitando por ANO na home, já
+    # que lá é só sobre APARECER no catálogo, não sobre poder avaliar). O
+    # formulário já fica escondido nesse caso (ver
+    # templates/catalog/detalhe.html), mas essa checagem aqui é o que
+    # realmente IMPEDE, caso alguém envie o POST direto (contornando a
+    # interface).
+    if not _titulo_ja_lancado(item):
         messages.error(request, traduzir("avaliacao_erro_nao_lancado", idioma_atual))
         return redirect("detalhe", tipo=tipo, pk=pk)
 
@@ -632,6 +654,11 @@ def _completar_filme(item):
         item.poster_url = info["poster_url"]
     if not item.imdb_id and info.get("imdb_id"):
         item.imdb_id = info["imdb_id"]
+    # Preenche a data exata de lançamento pra quem foi cadastrado antes
+    # desse campo existir (ou criado "rápido" pela busca, sem essa info) —
+    # ver comentário em Titulo.data_lancamento sobre pra que ela serve.
+    if not item.data_lancamento and info.get("data_lancamento"):
+        item.data_lancamento = info["data_lancamento"]
     item.dados_completos = True
     item.save()
     if not item.notas_omdb_verificadas:
@@ -673,6 +700,8 @@ def _completar_serie(item):
         item.poster_url = info["poster_url"]
     if not item.imdb_id and info.get("imdb_id"):
         item.imdb_id = info["imdb_id"]
+    if not item.data_lancamento and info.get("data_lancamento"):
+        item.data_lancamento = info["data_lancamento"]
     item.dados_completos = True
     item.save()
     if not item.notas_omdb_verificadas:
@@ -745,6 +774,7 @@ def _criar_filme_rapido(resultado_busca, idioma_tmdb=None):
             return existente
     dados = {
         "ano_lancamento": int(ano),
+        "data_lancamento": resultado_busca.get("data_lancamento"),
         "sinopse": resultado_busca.get("sinopse", ""),
         "poster_url": resultado_busca.get("poster_url", ""),
         "id_externo": id_externo,
@@ -767,6 +797,7 @@ def _criar_serie_rapida(resultado_busca, idioma_tmdb=None):
             return existente
     dados = {
         "ano_lancamento": int(ano),
+        "data_lancamento": resultado_busca.get("data_lancamento"),
         "sinopse": resultado_busca.get("sinopse", ""),
         "poster_url": resultado_busca.get("poster_url", ""),
         "id_externo": id_externo,

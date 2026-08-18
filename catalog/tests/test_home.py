@@ -15,6 +15,8 @@ DestaquesDoAnoNaoMostraTituloFuturoTest mais abaixo, que confirma que ela
 continua funcionando).
 """
 
+import datetime
+
 from django.test import Client, TestCase
 from django.utils import timezone
 
@@ -66,6 +68,20 @@ class HomeRecentesNaoMostraTituloFuturoTest(TestCase):
         resposta = self.client.get("/")
         self.assertEqual(resposta.status_code, 200)
         self.assertEqual(list(resposta.context["filmes"]), [])
+
+    def test_titulo_deste_ano_ainda_nao_lancado_continua_aparecendo_na_home(self):
+        # Importante não confundir as duas regras: a home continua
+        # decidindo quem APARECE só pelo ANO (`ano_lancamento`), mesmo que
+        # a regra de AVALIAÇÃO (ver test_detalhe_e_avaliacoes.py,
+        # AvaliarTituloComDataFuturaNoMesmoAnoTest) use a data exata. Um
+        # título como "Doomsday" — deste ano, mas com `data_lancamento` só
+        # pra daqui a alguns meses — precisa continuar navegável/visível
+        # normalmente; só a avaliação é que fica bloqueada até ele sair.
+        data_futura = datetime.date(self.ano_atual, 12, 31)
+        doomsday = criar_filme(titulo="Doomsday", ano=self.ano_atual, data_lancamento=data_futura)
+        resposta = self.client.get("/")
+        self.assertIn(doomsday, list(resposta.context["filmes"]))
+        self.assertContains(resposta, "Doomsday")
 
 
 class DestaquesDoAnoNaoMostraTituloFuturoTest(TestCase):
