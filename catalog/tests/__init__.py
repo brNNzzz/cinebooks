@@ -61,7 +61,10 @@ Arquivos:
 - test_trailer_youtube.py      → botão "Assistir trailer", que abre o
                                   trailer no YouTube (vindo do TMDB, sem
                                   baixar/hospedar nenhum vídeo — só um link
-                                  direto pro YouTube).
+                                  direto pro YouTube), incluindo a escolha
+                                  automática de um trailer dublado/legendado
+                                  no idioma em que a pessoa está navegando
+                                  o site, quando o TMDB tiver um.
 
 Como rodar:
     python manage.py test                        → roda tudo

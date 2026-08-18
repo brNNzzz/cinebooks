@@ -260,7 +260,7 @@ def _extrair_onde_assistir(dados):
     return onde_assistir
 
 
-def _extrair_trailer_youtube(dados):
+def _extrair_trailer_youtube(dados, idioma=IDIOMA_TMDB_PADRAO):
     """Lê o bloco "videos" (vindo de graça na mesma chamada de detalhes, via
     append_to_response) e devolve a URL de um trailer no YouTube pra esse
     título, ou "" se não achar nenhum.
@@ -270,31 +270,44 @@ def _extrair_trailer_youtube(dados):
     manter as coisas simples (sempre abre no YouTube, como foi pedido).
 
     Ordem de preferência (a lista do TMDB não vem sempre no mesmo formato,
-    então escolhemos o "melhor" vídeo disponível):
-    1. Trailer marcado como "official" (direto do estúdio/distribuidora).
-    2. Qualquer outro Trailer.
-    3. Um Teaser, se não tiver nenhum Trailer.
+    então escolhemos o "melhor" vídeo disponível) — tenta achar um DUBLADO
+    no idioma pedido primeiro, e só cai pro que tiver disponível se não
+    achar (cada vídeo do TMDB carrega o próprio idioma em `iso_639_1`, ex:
+    "pt", "en"):
+    1. Trailer oficial NESSE idioma.
+    2. Qualquer trailer NESSE idioma (não necessariamente marcado oficial).
+    3. Trailer oficial em qualquer idioma (geralmente o original/inglês).
+    4. Qualquer trailer, de qualquer idioma.
+    5. Teaser (nessa mesma ordem de preferência), só se não achar trailer.
+
     Sobre direitos autorais: isso NÃO baixa nem hospeda o vídeo em lugar
     nenhum — é só um link pra abrir direto no YouTube (o próprio site do
     YouTube, na aba do navegador da pessoa), o mesmo que compartilhar
     qualquer link de vídeo. Sem problema legal nisso: quem decide se um
     vídeo pode ser visto assim é o YouTube/quem publicou, não quem linka
     pra ele."""
+    idioma_curto = (idioma or IDIOMA_TMDB_PADRAO).split("-")[0]
     videos = (dados.get("videos") or {}).get("results") or []
     candidatos_youtube = [v for v in videos if v.get("site") == "YouTube" and v.get("key")]
 
-    def _primeiro(tipo, so_oficial=False):
+    def _primeiro(tipo, so_oficial=False, so_no_idioma=False):
         for video in candidatos_youtube:
             if video.get("type") != tipo:
                 continue
             if so_oficial and not video.get("official"):
                 continue
+            if so_no_idioma and video.get("iso_639_1") != idioma_curto:
+                continue
             return video
         return None
 
     escolhido = (
-        _primeiro("Trailer", so_oficial=True)
+        _primeiro("Trailer", so_oficial=True, so_no_idioma=True)
+        or _primeiro("Trailer", so_no_idioma=True)
+        or _primeiro("Trailer", so_oficial=True)
         or _primeiro("Trailer")
+        or _primeiro("Teaser", so_oficial=True, so_no_idioma=True)
+        or _primeiro("Teaser", so_no_idioma=True)
         or _primeiro("Teaser", so_oficial=True)
         or _primeiro("Teaser")
     )
@@ -353,7 +366,7 @@ def detalhes_filme(tmdb_id, idioma=IDIOMA_TMDB_PADRAO):
         # nessa mesma chamada (append_to_response=watch/providers).
         "onde_assistir": _extrair_onde_assistir(dados),
         # Trailer no YouTube — idem, vem de graça (append_to_response=videos).
-        "trailer_youtube_url": _extrair_trailer_youtube(dados),
+        "trailer_youtube_url": _extrair_trailer_youtube(dados, idioma=idioma),
     }
 
 
@@ -389,7 +402,7 @@ def detalhes_serie(tmdb_id, idioma=IDIOMA_TMDB_PADRAO):
         "elenco": _extrair_elenco(dados),
         "imdb_id": (dados.get("external_ids") or {}).get("imdb_id") or "",
         "onde_assistir": _extrair_onde_assistir(dados),
-        "trailer_youtube_url": _extrair_trailer_youtube(dados),
+        "trailer_youtube_url": _extrair_trailer_youtube(dados, idioma=idioma),
     }
 
 

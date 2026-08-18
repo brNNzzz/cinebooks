@@ -75,12 +75,23 @@ def _buscar_traducao_agora(item, tipo, idioma):
     # idioma, fica em branco e o template mostra "sem sinopse disponível"
     # em vez de mostrar um parágrafo inteiro na língua errada.
     sinopse = info.get("sinopse") or ""
+    # Trailer dublado/legendado nesse idioma, se o TMDB tiver um (ver
+    # busca_externa._extrair_trailer_youtube, que já prioriza vídeo NESSE
+    # idioma antes de cair pro original) — cacheado junto, sem gastar
+    # nenhuma chamada a mais (já veio na mesma resposta acima). Guardado
+    # à parte de `item.trailer_youtube_url` (que é sempre o do idioma
+    # ORIGINAL do cadastro): ver `_trailer_no_idioma` pra exibição.
+    trailer = info.get("trailer_youtube_url") or ""
     cache = dict(item.traducoes or {})
     # "v": 2 marca esse formato como já corrigido (sinopse em branco em vez
     # de reaproveitar texto no idioma errado) — usado pelo comando
     # limpar_cache_traducoes pra saber quais entradas antigas (sem essa
-    # marca) precisam ser descartadas e buscadas de novo.
-    cache[idioma] = {"titulo": titulo, "sinopse": sinopse, "v": 2}
+    # marca) precisam ser descartadas e buscadas de novo. Entradas antigas
+    # (já "v": 2, mas de antes do trailer existir) simplesmente não têm a
+    # chave "trailer_youtube_url" — sem problema, `_trailer_no_idioma` cai
+    # pro trailer original nesse caso, e a próxima vez que alguém navegar
+    # nesse idioma pra esse título, essa entrada é reescrita já com ela.
+    cache[idioma] = {"titulo": titulo, "sinopse": sinopse, "trailer_youtube_url": trailer, "v": 2}
     item.traducoes = cache
     item.save(update_fields=["traducoes"])
     return titulo, sinopse
@@ -129,6 +140,26 @@ def _texto_no_idioma(item, tipo, idioma_atual):
         if resultado:
             return resultado
     return item.titulo, item.sinopse
+
+
+def _trailer_no_idioma(item, tipo, idioma_atual):
+    """Devolve a URL do trailer (YouTube) pra EXIBIR pra quem está
+    navegando em `idioma_atual` — dublado/legendado nesse idioma quando o
+    TMDB tiver um, senão cai pro trailer no idioma original do cadastro
+    (`item.trailer_youtube_url`), do mesmo jeito que o título já cai pro
+    original quando não há tradução (ver `_texto_no_idioma`).
+
+    Só olha o cache (`item.traducoes`) — não dispara nenhuma busca nova por
+    conta própria. Por isso só funciona chamada DEPOIS de `_texto_no_idioma`
+    pro mesmo item/idioma (a view `detalhe` faz nessa ordem): se o cache
+    ainda não tinha entrada pra esse idioma, `_texto_no_idioma` já disparou
+    a busca (via `_buscar_traducao_agora`) e populou `item.traducoes` — que
+    agora já inclui o trailer certo (`_buscar_traducao_agora` guarda os
+    dois juntos, na mesma chamada à API)."""
+    if not idioma_atual or idioma_atual == item.idioma_tmdb_conteudo:
+        return item.trailer_youtube_url
+    traducao = (item.traducoes or {}).get(idioma_atual) or {}
+    return traducao.get("trailer_youtube_url") or item.trailer_youtube_url
 
 
 def _destaques_do_ano(idioma_atual=None):
@@ -405,6 +436,10 @@ def detalhe(request, tipo, pk):
     item.titulo_exibicao, item.sinopse_exibicao = _texto_no_idioma(
         item, tipo, _idioma_tmdb_atual(request)
     )
+    # Trailer dublado/legendado nesse mesmo idioma, se tiver — precisa ser
+    # DEPOIS de _texto_no_idioma (ver comentário em _trailer_no_idioma sobre
+    # por quê: aproveita a mesma busca de tradução, sem chamada extra).
+    item.trailer_exibicao = _trailer_no_idioma(item, tipo, _idioma_tmdb_atual(request))
 
     minha_avaliacao = None
     na_watchlist = False
