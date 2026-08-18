@@ -47,8 +47,19 @@ class Command(BaseCommand):
             )
             return
 
-        encontrados = 0
-        ainda_sem = 0
+        # Resumo geral primeiro — ajuda a diagnosticar por telas (o Render
+        # gratuito não tem shell interativo pra consultar o banco direto):
+        # quantos títulos existem, quantos nunca foram sequer visitados
+        # (dados_completos=False — resolvem sozinhos na próxima visita) e
+        # quantos estão de fato "travados" (o caso que esse comando trata).
+        for modelo, rotulo_plural in ((Filme, "filmes"), (Serie, "séries")):
+            total = modelo.objects.count()
+            nunca_visitados = modelo.objects.filter(dados_completos=False).count()
+            travados = modelo.objects.filter(dados_completos=True, id_externo="").count()
+            self.stdout.write(
+                f"[resumo {rotulo_plural}] total={total} nunca_visitados={nunca_visitados} travados={travados}"
+            )
+
         encontrados_f, ainda_sem_f = self._tentar(Filme, _completar_filme, "filme")
         encontrados_s, ainda_sem_s = self._tentar(Serie, _completar_serie, "série")
         encontrados = encontrados_f + encontrados_s
@@ -66,13 +77,26 @@ class Command(BaseCommand):
         encontrados = 0
         ainda_sem = 0
         for item in travados:
+            # Log de CADA tentativa (não só das que dão certo) — sem isso não
+            # dava pra saber, só pelo log do deploy, se um título específico
+            # (ex: "A Origem") sequer chegou a ser tentado, ou se foi
+            # tentado e a busca não achou nada.
+            self.stdout.write(
+                f"  tentando {rotulo}: {item.titulo!r} "
+                f"(ano={item.ano_lancamento}, idioma={item.idioma_tmdb_conteudo!r})..."
+            )
             item.dados_completos = False
             item.save(update_fields=["dados_completos"])
-            funcao_completar(item)
+            try:
+                funcao_completar(item)
+            except Exception:
+                self.stdout.write(self.style.ERROR(f"    -> ERRO ao tentar completar {item.titulo!r}"))
+                raise
             item.refresh_from_db()
             if item.id_externo:
                 encontrados += 1
-                self.stdout.write(f"  {rotulo}: {item.titulo} -> encontrado (id_externo={item.id_externo})")
+                self.stdout.write(f"    -> encontrado (id_externo={item.id_externo})")
             else:
                 ainda_sem += 1
+                self.stdout.write(f"    -> NÃO encontrado")
         return encontrados, ainda_sem
