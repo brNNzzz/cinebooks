@@ -288,6 +288,36 @@ class Avaliacao(models.Model):
         return f"{self.usuario} → {self.titulo_avaliado} ({self.nota}/5)"
 
 
+class Busca(models.Model):
+    """Histórico de termos que um usuário LOGADO já buscou no site — um dos
+    3 sinais usados pra montar a fileira "Recomendados pra você" na home
+    (ver `catalog/recomendacoes.py`), junto com as avaliações e a watchlist.
+    Ajuda a captar interesse mesmo antes da pessoa avaliar ou guardar algo:
+    se ela vive buscando "Star Wars", "Duna", "Interestelar"..., isso já diz
+    bastante sobre o gosto dela, mesmo sem nenhuma nota dada ainda.
+
+    Buscas de quem NÃO está logado não são salvas (não tem em qual usuário
+    guardar, e não faria sentido misturar com o histórico de outra pessoa
+    no mesmo navegador)."""
+
+    usuario = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        verbose_name="usuário",
+        on_delete=models.CASCADE,
+        related_name="buscas",
+    )
+    termo = models.CharField("termo buscado", max_length=200)
+    criado_em = models.DateTimeField("buscado em", auto_now_add=True)
+
+    class Meta:
+        verbose_name = "busca"
+        verbose_name_plural = "buscas"
+        ordering = ["-criado_em"]
+
+    def __str__(self):
+        return f"{self.usuario} buscou: {self.termo!r}"
+
+
 class QueroVer(models.Model):
     """"Watchlist": um usuário marca um Filme, Série ou Livro que ainda não
     viu/leu mas quer ver depois — separado das avaliações de propósito, já

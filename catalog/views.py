@@ -19,7 +19,8 @@ from django.views.decorators.http import require_POST
 from . import busca_externa
 from .forms import AvaliacaoForm, RegistroForm
 from .i18n import IDIOMA_PADRAO, IDIOMAS, traduzir
-from .models import Avaliacao, Filme, Genero, Livro, Pessoa, QueroVer, Serie
+from .models import Avaliacao, Busca, Filme, Genero, Livro, Pessoa, QueroVer, Serie
+from .recomendacoes import LIMITE_RECOMENDACOES, recomendar_para_usuario
 
 logger = logging.getLogger(__name__)
 
@@ -317,8 +318,18 @@ def home(request):
         idioma_tmdb_atual,
     )
 
+    # Fileira "Recomendados pra você" — só pra quem está logado (sem conta
+    # não tem avaliação/watchlist/busca salva pra basear recomendação
+    # nenhuma; ver catalog/recomendacoes.py). Fica de fora da lista se a
+    # pessoa ainda não deixou nenhuma pista de gosto ainda.
+    recomendados = []
+    if request.user.is_authenticated:
+        recomendados = recomendar_para_usuario(request.user, limite=LIMITE_RECOMENDACOES)
+        _aplicar_exibicao([(item, item.tipo) for item in recomendados], idioma_tmdb_atual)
+
     contexto = {
         "destaques_do_ano": _destaques_do_ano(idioma_tmdb_atual),
+        "recomendados": recomendados,
         "filmes": filmes,
         "series": series,
         "livros": livros,
@@ -1134,6 +1145,17 @@ def busca(request):
     idioma_tmdb = _idioma_tmdb_atual(request)
 
     if termo:
+        # Guarda o termo buscado no histórico da pessoa (só se estiver
+        # logada — sem conta não tem onde guardar) — usado depois como um
+        # dos sinais da fileira "Recomendados pra você" na home (ver
+        # catalog/recomendacoes.py). Não trava a busca se der algum erro
+        # inesperado ao salvar.
+        if request.user.is_authenticated:
+            try:
+                Busca.objects.create(usuario=request.user, termo=termo)
+            except Exception:
+                logger.exception("Falha ao salvar histórico de busca de %s (%r)", request.user, termo)
+
         filmes = list(Filme.objects.filter(titulo__icontains=termo))
         series = list(Serie.objects.filter(titulo__icontains=termo))
         livros = list(Livro.objects.filter(titulo__icontains=termo))

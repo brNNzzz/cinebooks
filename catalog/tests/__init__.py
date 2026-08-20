@@ -96,6 +96,15 @@ Arquivos:
                                   próprio arquivo do comando pra entender
                                   por que isso é necessário no Render
                                   gratuito).
+- test_recomendacoes.py        → motor de recomendações personalizadas
+                                  (catalog/recomendacoes.py): pontuação por
+                                  gênero + diretor/criador/autor + década,
+                                  a partir de avaliações + watchlist +
+                                  buscas, testado direto (sem HTTP).
+- test_recomendacoes_home.py   → a fileira "Recomendados pra você" aparecendo
+                                  (ou não) na home de verdade, dependendo de
+                                  quem está logado e do que essa pessoa já
+                                  avaliou/buscou/colocou na watchlist.
 
 Como rodar:
     python manage.py test                        → roda tudo

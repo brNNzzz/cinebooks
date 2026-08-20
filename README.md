@@ -48,6 +48,11 @@ O diagrama de classes completo está em [`docs/diagrama_classes.png`](docs/diagr
 - Qualquer usuário logado pode marcar/desmarcar um título na sua lista pessoal, direto na página de detalhe.
 - A lista aparece separada por categoria (Filmes / Séries / Livros) na página de perfil.
 
+**Recomendações personalizadas ("Recomendados pra você")**
+- Fileira exclusiva na home para usuários logados, calculada a partir de 3 sinais: as notas dadas nas avaliações, os títulos na watchlist e o histórico de buscas da própria pessoa (`catalog/recomendacoes.py`).
+- Pontua o catálogo por gênero, diretor/criadora/autor(a) em comum e década de lançamento — uma nota alta (4–5) reforça esses sinais, uma nota baixa (1–2) reforça o oposto (evita recomendar mais do que a pessoa não gostou).
+- Sem nenhuma avaliação, item na watchlist ou busca ainda (conta nova), a fileira simplesmente não aparece, em vez de recomendar algo aleatório.
+
 **Perfil de usuário**
 - Avatar automático com as iniciais do nome de usuário (sem precisar de upload de foto — evita depender de armazenamento externo).
 - Estatísticas de destaque: total de avaliações, nota média dada, gênero e título favoritos.
