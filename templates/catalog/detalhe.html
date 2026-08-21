@@ -4,169 +4,230 @@
 {% block titulo %}{{ item.titulo_exibicao }} — CineBooks{% endblock %}
 
 {% block conteudo %}
-<a href="{% url 'lista' tipo %}" class="btn btn-sm btn-outline-secondary mb-3">&larr; {% t "detalhe_voltar" %}</a>
+<div class="nc-detalhe-topo{% if tipo == 'livro' %} nc-detalhe-topo--livro{% endif %}">
+    <a href="{% url 'lista' tipo %}" class="nc-nav__link">&larr; {% t "detalhe_voltar" %}</a>
 
-<div class="row">
-    <div class="col-md-3 mb-4">
-        <img src="{{ item.poster_exibicao|default:item.poster_url|default:'https://placehold.co/400x600/1f2937/ffffff?text=Sem+imagem' }}"
-             class="poster" alt="Pôster de {{ item.titulo_exibicao }}">
-    </div>
-    <div class="col-md-9">
-        <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
-            <div>
-                <span class="badge bg-secondary mb-2">{{ rotulo }}</span>
-                <h1 class="h3">{{ item.titulo_exibicao }} <small class="text-muted">({{ item.ano_lancamento }})</small></h1>
+    <div class="nc-detalhe-linha">
+        <img class="nc-detalhe-poster"
+             src="{{ item.poster_exibicao|default:item.poster_url|default:'https://placehold.co/340x510/232532/e9e9ed?text=Sem+imagem' }}"
+             alt="Pôster de {{ item.titulo_exibicao }}">
+        <div class="nc-detalhe-info">
+            <div class="nc-detalhe-tipo">{{ rotulo }}</div>
+            <h1 class="nc-detalhe-titulo">{{ item.titulo_exibicao }}</h1>
+            <div class="nc-detalhe-meta">
+                <span>{{ item.ano_lancamento }}</span>
+                {% if tipo == "filme" and item.duracao_minutos %}
+                    <span>·</span><span>{{ item.duracao_minutos }} {% t "detalhe_min_abrev" %}</span>
+                {% elif tipo == "serie" and item.numero_temporadas %}
+                    <span>·</span><span>{{ item.numero_temporadas }} {% t "detalhe_temporadas" %}</span>
+                {% elif tipo == "livro" and item.numero_paginas %}
+                    <span>·</span><span>{{ item.numero_paginas }} {% t "detalhe_paginas" %}</span>
+                {% endif %}
+                {% if item.generos.all %}
+                    <span>·</span><span>{% for g in item.generos.all %}{{ g.nome|traduzir_genero:IDIOMA_ATUAL }}{% if not forloop.last %}, {% endif %}{% endfor %}</span>
+                {% endif %}
+                {% if tipo == "filme" and item.diretor %}
+                    <span>·</span><span>{% t "detalhe_direcao" %}: {{ item.diretor }}</span>
+                {% elif tipo == "serie" and item.criador %}
+                    <span>·</span><span>{% t "detalhe_criacao" %}: {{ item.criador }}</span>
+                {% elif tipo == "livro" and item.autor %}
+                    <span>·</span><span>{% t "detalhe_autor" %}: {{ item.autor }}</span>
+                {% endif %}
+                {% if tipo == "livro" and item.editora %}
+                    <span>·</span><span>{% t "detalhe_editora" %}: {{ item.editora }}</span>
+                {% endif %}
             </div>
-            <div class="d-flex gap-2">
+
+            {% if media %}
+                <div class="nc-detalhe-meta" style="margin-top:6px">
+                    <span>⭐ {{ media }}/5 · {{ item.total_avaliacoes }} {% t "detalhe_avaliacoes_no_site" %}</span>
+                </div>
+            {% else %}
+                <div class="nc-detalhe-meta" style="margin-top:6px"><span>{% t "detalhe_sem_avaliacoes_site" %}</span></div>
+            {% endif %}
+
+            {% if item.nota_publico or item.nota_critica or item.nota_rotten_tomatoes %}
+                <div class="nc-notas-internet">
+                    <div class="nc-notas-internet__titulo">{% t "detalhe_notas_internet" %}</div>
+                    <div class="nc-notas-internet__divisor"></div>
+                    <div class="nc-notas-internet__grade">
+                        {% if item.nota_publico %}
+                            <div><div class="nc-notas-internet__rotulo">{% t "detalhe_publico" %}</div><div class="nc-notas-internet__valor">{{ item.nota_publico }}/10</div></div>
+                        {% endif %}
+                        {% if item.nota_critica %}
+                            <div><div class="nc-notas-internet__rotulo">{% t "detalhe_critica" %}</div><div class="nc-notas-internet__valor">{{ item.nota_critica }}/10</div></div>
+                        {% endif %}
+                        {% if item.nota_rotten_tomatoes %}
+                            <div><div class="nc-notas-internet__rotulo">🍅 Rotten Tomatoes</div><div class="nc-notas-internet__valor">{{ item.nota_rotten_tomatoes }}%</div></div>
+                        {% endif %}
+                    </div>
+                </div>
+            {% endif %}
+
+            <div class="nc-detalhe-acoes">
                 {% if item.trailer_exibicao %}
-                    <a href="{{ item.trailer_exibicao }}" target="_blank" rel="noopener"
-                       class="btn btn-sm btn-danger">{% t "detalhe_assistir_trailer" %}</a>
+                    <a href="{{ item.trailer_exibicao }}" target="_blank" rel="noopener" class="nc-btn nc-btn-primary">{% t "detalhe_assistir_trailer" %}</a>
                 {% endif %}
                 {% if user.is_authenticated %}
                     <form action="{% url 'alternar_watchlist' tipo item.pk %}" method="post">
                         {% csrf_token %}
                         {% if na_watchlist %}
-                            <button type="submit" class="btn btn-sm btn-outline-danger">{% t "watchlist_remover" %}</button>
+                            <button type="submit" class="nc-btn nc-btn-secondary">{% t "watchlist_remover" %}</button>
                         {% else %}
-                            <button type="submit" class="btn btn-sm btn-outline-primary">{% t "watchlist_adicionar" %}</button>
+                            <button type="submit" class="nc-btn nc-btn-secondary">{% t "watchlist_adicionar" %}</button>
                         {% endif %}
                     </form>
                 {% endif %}
             </div>
         </div>
+    </div>
+</div>
 
-        {% if media %}
-            <p class="fs-5 mb-1">⭐ <strong>{{ media }}</strong> / 5 &middot; {{ item.total_avaliacoes }} {% t "detalhe_avaliacoes_no_site" %}</p>
-        {% else %}
-            <p class="text-muted mb-1">{% t "detalhe_sem_avaliacoes_site" %}</p>
-        {% endif %}
-
-        {% if item.nota_publico or item.nota_critica or item.nota_rotten_tomatoes %}
-            <p class="text-muted small mb-3">
-                {% t "detalhe_notas_internet" %}
-                {% if item.nota_publico %}<span class="badge bg-primary">{% t "detalhe_publico" %}: {{ item.nota_publico }}/10</span>{% endif %}
-                {% if item.nota_critica %}<span class="badge bg-info text-dark">{% t "detalhe_critica" %}: {{ item.nota_critica }}/10</span>{% endif %}
-                {% if item.nota_rotten_tomatoes %}<span class="badge bg-danger">🍅 Rotten Tomatoes: {{ item.nota_rotten_tomatoes }}%</span>{% endif %}
-            </p>
-        {% endif %}
-
-        <ul class="list-unstyled text-muted">
-            {% if tipo == "filme" %}
-                {% if item.diretor %}<li><strong>{% t "detalhe_direcao" %}:</strong> {{ item.diretor }}</li>{% endif %}
-                {% if item.duracao_minutos %}<li><strong>{% t "detalhe_duracao" %}:</strong> {{ item.duracao_minutos }} {% t "detalhe_min_abrev" %}</li>{% endif %}
-            {% elif tipo == "serie" %}
-                {% if item.criador %}<li><strong>{% t "detalhe_criacao" %}:</strong> {{ item.criador }}</li>{% endif %}
-                {% if item.numero_temporadas %}<li><strong>{% t "detalhe_temporadas" %}:</strong> {{ item.numero_temporadas }}</li>{% endif %}
-            {% elif tipo == "livro" %}
-                {% if item.autor %}<li><strong>{% t "detalhe_autor" %}:</strong> {{ item.autor }}</li>{% endif %}
-                {% if item.editora %}<li><strong>{% t "detalhe_editora" %}:</strong> {{ item.editora }}</li>{% endif %}
-                {% if item.numero_paginas %}<li><strong>{% t "detalhe_paginas" %}:</strong> {{ item.numero_paginas }}</li>{% endif %}
-            {% endif %}
-            {% if item.generos.all %}
-                <li><strong>{% t "detalhe_generos" %}:</strong> {% for g in item.generos.all %}{{ g.nome|traduzir_genero:IDIOMA_ATUAL }}{% if not forloop.last %}, {% endif %}{% endfor %}</li>
-            {% endif %}
-        </ul>
-
-        <p>{{ item.sinopse_exibicao|default:"" }}{% if not item.sinopse_exibicao %}{% t "detalhe_sem_sinopse" %}{% endif %}</p>
+<div class="nc-detalhe-corpo">
+    <div>
+        <p class="nc-sinopse">{{ item.sinopse_exibicao|default:"" }}{% if not item.sinopse_exibicao %}{% t "detalhe_sem_sinopse" %}{% endif %}</p>
 
         {% if tipo == "livro" and item.autor_pessoa %}
-            <div class="d-flex align-items-center gap-2 mt-3">
+            <div style="display:flex;align-items:center;gap:12px;margin-top:20px">
                 {% if item.autor_pessoa.foto_url %}
                     <img src="{{ item.autor_pessoa.foto_url }}" alt="Foto de {{ item.autor_pessoa.nome }}"
-                         class="rounded-circle" style="width:56px;height:56px;object-fit:cover;">
+                         style="width:52px;height:52px;border-radius:50%;object-fit:cover;flex:none;">
                 {% endif %}
                 <div>
-                    <div class="text-muted small">{% t "detalhe_autor" %}</div>
-                    <strong>{{ item.autor_pessoa.nome }}</strong>
+                    <div class="nc-text-muted" style="font-size:12px">{% t "detalhe_autor" %}</div>
+                    <div style="color:var(--color-text)">{{ item.autor_pessoa.nome }}</div>
                 </div>
             </div>
         {% endif %}
-    </div>
-</div>
 
-{% if tipo == "filme" or tipo == "serie" %}
-    {% if item.onde_assistir.streaming or item.onde_assistir.aluguel or item.onde_assistir.compra %}
-        <hr>
-        <h2 class="h4 mb-3">{% t "onde_assistir_titulo" %}</h2>
-
-        {% if item.onde_assistir.streaming %}
-            <p class="text-muted small mb-1">{% t "onde_assistir_streaming" %}</p>
-            <div class="d-flex flex-wrap gap-2 mb-3">
-                {% for provedor in item.onde_assistir.streaming %}
-                    {% include "catalog/_provedor_badge.html" %}
-                {% endfor %}
-            </div>
-        {% endif %}
-
-        {% if item.onde_assistir.aluguel %}
-            <p class="text-muted small mb-1">{% t "onde_assistir_aluguel" %}</p>
-            <div class="d-flex flex-wrap gap-2 mb-3">
-                {% for provedor in item.onde_assistir.aluguel %}
-                    {% include "catalog/_provedor_badge.html" %}
-                {% endfor %}
-            </div>
-        {% endif %}
-
-        {% if item.onde_assistir.compra %}
-            <p class="text-muted small mb-1">{% t "onde_assistir_compra" %}</p>
-            <div class="d-flex flex-wrap gap-2 mb-3">
-                {% for provedor in item.onde_assistir.compra %}
-                    {% include "catalog/_provedor_badge.html" %}
-                {% endfor %}
-            </div>
-        {% endif %}
-    {% endif %}
-
-    {% if item.elenco.all %}
-        <hr>
-        <h2 class="h4 mb-3">{% t "detalhe_elenco" %}</h2>
-        <div class="row row-cols-2 row-cols-sm-4 row-cols-md-6 g-3 mb-2">
-            {% for pessoa in item.elenco.all %}
-                <div class="col text-center">
-                    <img src="{{ pessoa.foto_url|default:'https://placehold.co/150x150/1f2937/ffffff?text=?' }}"
-                         alt="Foto de {{ pessoa.nome }}" class="rounded-circle mb-1"
-                         style="width:72px;height:72px;object-fit:cover;">
-                    <div class="small">{{ pessoa.nome }}</div>
+        {% if tipo == "filme" or tipo == "serie" %}
+            {% if item.elenco.all %}
+                <hr class="nc-hr">
+                <h3 class="nc-secao-titulo-h3">{% t "detalhe_elenco" %}</h3>
+                <div class="nc-elenco-grade">
+                    {% for pessoa in item.elenco.all %}
+                        <div>
+                            <div class="nc-elenco-retrato">
+                                {% if pessoa.foto_url %}
+                                    <img src="{{ pessoa.foto_url }}" alt="Foto de {{ pessoa.nome }}">
+                                {% else %}
+                                    <span>{{ pessoa.nome|slice:":1" }}</span>
+                                {% endif %}
+                            </div>
+                            <div class="nc-elenco-nome">{{ pessoa.nome }}</div>
+                        </div>
+                    {% endfor %}
                 </div>
+            {% endif %}
+        {% endif %}
+
+        <hr class="nc-hr">
+        <h3 class="nc-secao-titulo-h3">{% t "detalhe_avaliacoes_titulo" %}</h3>
+
+        {% if not ja_lancado %}
+            <p class="nc-text-muted">{% t "detalhe_ainda_nao_lancado" %}</p>
+        {% elif user.is_authenticated %}
+            <form method="post" action="{% url 'avaliar' tipo item.pk %}" id="form-avaliar">
+                {% csrf_token %}
+                <div class="nc-estrelas" {% if minha_avaliacao %}data-nota-atual="{{ minha_avaliacao.nota }}"{% endif %}>
+                    {% for n in "12345" %}
+                        <button type="submit" name="nota" value="{{ forloop.counter }}"
+                                class="nc-estrela{% if minha_avaliacao and forloop.counter <= minha_avaliacao.nota %} is-cheia{% endif %}"
+                                title="{{ forloop.counter }}">
+                            <svg viewBox="0 0 24 24"><path d="M12 2.5l2.9 6.4 6.9.6-5.2 4.6 1.6 6.8L12 17.1 5.8 20.9l1.6-6.8-5.2-4.6 6.9-.6L12 2.5z"/></svg>
+                        </button>
+                    {% endfor %}
+                    {% if minha_avaliacao %}<span class="nc-estrelas-nota">{{ minha_avaliacao.nota }}/5</span>{% endif %}
+                </div>
+                <p class="nc-estrelas-texto">
+                    {% if minha_avaliacao %}{% t "detalhe_editar_avaliacao" %} — {% t "avaliacao_toque_desfazer" %}{% else %}{% t "detalhe_deixar_avaliacao" %}{% endif %}
+                </p>
+                <textarea name="comentario" class="nc-input" style="width:100%;max-width:520px" rows="3"
+                          placeholder="{{ form.comentario.field.widget.attrs.placeholder }}">{{ form.comentario.value|default:"" }}</textarea>
+                {% if minha_avaliacao %}
+                    {% comment %}
+                    Já tem nota — dá pra reenviar só o comentário sem precisar
+                    reclicar numa estrela (reclicar na mesma agora desfaz a
+                    avaliação inteira, ver JS no fim do bloco).
+                    {% endcomment %}
+                    <div style="margin-top:10px">
+                        <button type="submit" name="nota" value="{{ minha_avaliacao.nota }}" class="nc-btn nc-btn-secondary nc-btn-sm">{% t "detalhe_salvar" %}</button>
+                    </div>
+                {% else %}
+                    <p class="nc-estrelas-texto">{% t "avaliacao_escolha_estrela" %}</p>
+                {% endif %}
+            </form>
+            {% if minha_avaliacao %}
+                <form method="post" action="{% url 'excluir_avaliacao' minha_avaliacao.pk %}" id="form-excluir" style="display:none">
+                    {% csrf_token %}
+                    <input type="hidden" name="proximo" value="{% url 'detalhe' tipo item.pk %}">
+                </form>
+            {% endif %}
+        {% else %}
+            <p class="nc-text-muted"><a href="{% url 'login' %}" style="color:var(--color-accent)">{% t "detalhe_entre" %}</a> {% t "detalhe_ou_crie_conta" %}</p>
+        {% endif %}
+
+        <div style="margin-top:22px">
+            {% for avaliacao in avaliacoes %}
+                <div style="padding:14px 0;border-bottom:1px solid rgba(233,233,237,.08)">
+                    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+                        <strong style="color:var(--color-text);font-weight:500">{{ avaliacao.usuario.username }}</strong>
+                        <span class="nc-estrelas">
+                            {% for n in "12345" %}<span class="nc-estrela{% if forloop.counter <= avaliacao.nota %} is-cheia{% endif %}" style="padding:0"><svg viewBox="0 0 24 24" style="width:14px;height:14px"><path d="M12 2.5l2.9 6.4 6.9.6-5.2 4.6 1.6 6.8L12 17.1 5.8 20.9l1.6-6.8-5.2-4.6 6.9-.6L12 2.5z"/></svg></span>{% endfor %}
+                        </span>
+                        <span class="nc-text-muted" style="font-size:12px">{{ avaliacao.criado_em|date:"d/m/Y" }}</span>
+                    </div>
+                    {% if avaliacao.comentario %}<p style="margin:8px 0 0;color:var(--color-neutral-300);font-size:13.5px">{{ avaliacao.comentario }}</p>{% endif %}
+                </div>
+            {% empty %}
+                <p class="nc-text-muted">{% t "detalhe_nenhuma_avaliacao" %}</p>
             {% endfor %}
         </div>
-    {% endif %}
-{% endif %}
+    </div>
 
-<hr>
+    {% if tipo == "filme" or tipo == "serie" %}
+        {% if item.onde_assistir.streaming or item.onde_assistir.aluguel or item.onde_assistir.compra %}
+            <div>
+                <div class="nc-card-lateral">
+                    <div class="nc-notas-internet__titulo">{% t "onde_assistir_titulo" %}</div>
 
-<h2 class="h4 mb-3">{% t "detalhe_avaliacoes_titulo" %}</h2>
-
-{% if not ja_lancado %}
-<p class="text-muted">{% t "detalhe_ainda_nao_lancado" %}</p>
-{% elif user.is_authenticated %}
-<div class="card mb-4">
-    <div class="card-body">
-        <h3 class="h6">{% if minha_avaliacao %}{% t "detalhe_editar_avaliacao" %}{% else %}{% t "detalhe_deixar_avaliacao" %}{% endif %}</h3>
-        <form method="post" action="{% url 'avaliar' tipo item.pk %}">
-            {% csrf_token %}
-            <div class="row g-2 align-items-start">
-                <div class="col-sm-3">{{ form.nota }}</div>
-                <div class="col-sm-7">{{ form.comentario }}</div>
-                <div class="col-sm-2">
-                    <button type="submit" class="btn btn-primary w-100">{% t "detalhe_salvar" %}</button>
+                    {% if item.onde_assistir.streaming %}
+                        <p class="nc-text-muted" style="font-size:12px;margin:14px 0 0">{% t "onde_assistir_streaming" %}</p>
+                        <div class="nc-onde-lista">
+                            {% for provedor in item.onde_assistir.streaming %}{% include "catalog/_provedor_badge.html" %}{% endfor %}
+                        </div>
+                    {% endif %}
+                    {% if item.onde_assistir.aluguel %}
+                        <p class="nc-text-muted" style="font-size:12px;margin:14px 0 0">{% t "onde_assistir_aluguel" %}</p>
+                        <div class="nc-onde-lista">
+                            {% for provedor in item.onde_assistir.aluguel %}{% include "catalog/_provedor_badge.html" %}{% endfor %}
+                        </div>
+                    {% endif %}
+                    {% if item.onde_assistir.compra %}
+                        <p class="nc-text-muted" style="font-size:12px;margin:14px 0 0">{% t "onde_assistir_compra" %}</p>
+                        <div class="nc-onde-lista">
+                            {% for provedor in item.onde_assistir.compra %}{% include "catalog/_provedor_badge.html" %}{% endfor %}
+                        </div>
+                    {% endif %}
                 </div>
             </div>
-        </form>
-    </div>
+        {% endif %}
+    {% endif %}
 </div>
-{% else %}
-<p><a href="{% url 'login' %}">{% t "detalhe_entre" %}</a> {% t "detalhe_ou_crie_conta" %}</p>
-{% endif %}
+{% endblock %}
 
-{% for avaliacao in avaliacoes %}
-    <div class="border-bottom py-2">
-        <strong>{{ avaliacao.usuario.username }}</strong>
-        <span class="badge bg-warning text-dark">⭐ {{ avaliacao.nota }}</span>
-        <span class="text-muted small">{{ avaliacao.criado_em|date:"d/m/Y" }}</span>
-        {% if avaliacao.comentario %}<p class="mb-0">{{ avaliacao.comentario }}</p>{% endif %}
-    </div>
-{% empty %}
-    <p class="text-muted">{% t "detalhe_nenhuma_avaliacao" %}</p>
-{% endfor %}
+{% block extra_js %}
+<script>
+document.querySelectorAll('.nc-estrelas[data-nota-atual] .nc-estrela').forEach(function (botao) {
+    botao.addEventListener('click', function (evento) {
+        var container = botao.closest('.nc-estrelas');
+        var notaAtual = container.getAttribute('data-nota-atual');
+        if (notaAtual && botao.value === notaAtual) {
+            evento.preventDefault();
+            var formExcluir = document.getElementById('form-excluir');
+            if (formExcluir) { formExcluir.submit(); }
+        }
+    });
+});
+</script>
 {% endblock %}

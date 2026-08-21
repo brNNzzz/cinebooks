@@ -5,143 +5,95 @@
 {% block titulo %}{% t "perfil_titulo" %} — CineBooks{% endblock %}
 
 {% block conteudo %}
-<div class="d-flex align-items-center gap-3 mb-4">
-    <div class="rounded-circle d-flex align-items-center justify-content-center text-white fw-bold"
-         style="width:72px;height:72px;font-size:1.5rem;background-color:{{ user.username|cor_avatar }};">
-        {{ user.username|iniciais }}
-    </div>
-    <div>
-        <h1 class="h3 mb-0">{{ user.username }}</h1>
-        <p class="text-muted mb-0">{% t "perfil_titulo" %}</p>
-    </div>
-</div>
-
-<div class="row g-3 mb-5">
-    <div class="col-6 col-md-3">
-        <div class="card h-100 text-center">
-            <div class="card-body">
-                <div class="fs-3 fw-bold">{{ total_avaliacoes }}</div>
-                <div class="text-muted small">{% t "perfil_total_avaliacoes" %}</div>
+<div class="nc-pagina">
+    <div class="nc-perfil-cabecalho">
+        <div class="nc-perfil-avatar" style="background-color:{{ user.username|cor_avatar }};color:#fff">
+            {{ user.username|iniciais }}
+        </div>
+        <div>
+            <div class="nc-perfil-nome">{{ user.username }}</div>
+            <div class="nc-perfil-meta">
+                {{ total_avaliacoes }} {% t "perfil_total_avaliacoes" %}
+                {% if nota_media_dada %} · ⭐ {{ nota_media_dada }} {% t "perfil_nota_media" %}{% endif %}
             </div>
         </div>
-    </div>
-    <div class="col-6 col-md-3">
-        <div class="card h-100 text-center">
-            <div class="card-body">
-                <div class="fs-3 fw-bold">{% if nota_media_dada %}⭐ {{ nota_media_dada }}{% else %}—{% endif %}</div>
-                <div class="text-muted small">{% t "perfil_nota_media" %}</div>
-            </div>
+        <div class="nc-perfil-stats">
+            <div><div class="nc-perfil-stat__numero">{{ total_watchlist }}</div><div class="nc-perfil-stat__rotulo">{% t "perfil_aba_quero_ver" %}</div></div>
+            <div><div class="nc-perfil-stat__numero">{{ total_assistidos }}</div><div class="nc-perfil-stat__rotulo">{% t "perfil_aba_assistidos" %}</div></div>
+            <div><div class="nc-perfil-stat__numero">{{ total_lidos }}</div><div class="nc-perfil-stat__rotulo">{% t "perfil_aba_lidos" %}</div></div>
         </div>
     </div>
-    <div class="col-6 col-md-3">
-        <div class="card h-100 text-center">
-            <div class="card-body">
-                <div class="fs-5 fw-bold">{{ genero_favorito|default:"—" }}</div>
-                <div class="text-muted small">{% t "perfil_genero_favorito" %}</div>
+
+    <div class="nc-perfil-abas" role="tablist">
+        <button class="nc-chip is-active" id="tab-quero-ver" data-bs-toggle="tab" data-bs-target="#aba-quero-ver" type="button" role="tab">
+            {% t "perfil_aba_quero_ver" %} ({{ total_watchlist }})
+        </button>
+        <button class="nc-chip" id="tab-assistidos" data-bs-toggle="tab" data-bs-target="#aba-assistidos" type="button" role="tab">
+            {% t "perfil_aba_assistidos" %} ({{ total_assistidos }})
+        </button>
+        <button class="nc-chip" id="tab-lidos" data-bs-toggle="tab" data-bs-target="#aba-lidos" type="button" role="tab">
+            {% t "perfil_aba_lidos" %} ({{ total_lidos }})
+        </button>
+        <button class="nc-chip" id="tab-ano" data-bs-toggle="tab" data-bs-target="#aba-ano" type="button" role="tab">
+            {% t "perfil_aba_ano_revisao" %}
+        </button>
+    </div>
+
+    <div class="tab-content">
+        <div class="tab-pane fade show active" id="aba-quero-ver" role="tabpanel">
+            <div class="nc-estante-grade">
+                {% for item_watchlist in watchlist_filmes %}{% include "catalog/_estante_watchlist.html" %}{% endfor %}
+                {% for item_watchlist in watchlist_series %}{% include "catalog/_estante_watchlist.html" %}{% endfor %}
+                {% for item_watchlist in watchlist_livros %}{% include "catalog/_estante_watchlist.html" %}{% endfor %}
+            </div>
+            {% if not watchlist_filmes and not watchlist_series and not watchlist_livros %}
+                <p class="nc-text-muted" style="margin-top:22px">{% t "watchlist_vazia" %}</p>
+            {% endif %}
+        </div>
+
+        <div class="tab-pane fade" id="aba-assistidos" role="tabpanel">
+            <div class="nc-estante-grade">
+                {% for avaliacao in avaliacoes_filmes %}{% include "catalog/_estante_avaliacao.html" %}{% endfor %}
+                {% for avaliacao in avaliacoes_series %}{% include "catalog/_estante_avaliacao.html" %}{% endfor %}
+            </div>
+            {% if not avaliacoes_filmes and not avaliacoes_series %}
+                <p class="nc-text-muted" style="margin-top:22px">{% t "perfil_sem_avaliacoes" %}</p>
+            {% endif %}
+        </div>
+
+        <div class="tab-pane fade" id="aba-lidos" role="tabpanel">
+            <div class="nc-estante-grade">
+                {% for avaliacao in avaliacoes_livros %}{% include "catalog/_estante_avaliacao.html" %}{% endfor %}
+            </div>
+            {% if not avaliacoes_livros %}
+                <p class="nc-text-muted" style="margin-top:22px">{% t "perfil_sem_avaliacoes" %}</p>
+            {% endif %}
+        </div>
+
+        <div class="tab-pane fade" id="aba-ano" role="tabpanel">
+            <div class="nc-ano-revisao-grade">
+                <div class="nc-card-lateral">
+                    <div class="nc-notas-internet__titulo">{% t "perfil_genero_favorito" %}</div>
+                    <div class="nc-ano-revisao-numero">{{ genero_favorito|default:"—" }}</div>
+                </div>
+                <div class="nc-card-lateral">
+                    <div class="nc-notas-internet__titulo">{% t "perfil_nota_media" %}</div>
+                    <div class="nc-ano-revisao-numero">{% if nota_media_dada %}⭐ {{ nota_media_dada }}/5{% else %}—{% endif %}</div>
+                    <div class="nc-ano-revisao-detalhe">{{ total_avaliacoes }} {% t "perfil_total_avaliacoes" %}</div>
+                </div>
+                <div class="nc-card-lateral">
+                    <div class="nc-notas-internet__titulo">{% t "perfil_favorito" %}</div>
+                    {% if favorito %}
+                        <a href="{% url 'detalhe' favorito.tipo favorito.object_id %}" class="nc-ano-revisao-numero" style="display:block;color:var(--color-accent);text-decoration:none;font-size:16px">
+                            {{ favorito.titulo_avaliado.titulo|truncatechars:32 }}
+                        </a>
+                        <div class="nc-ano-revisao-detalhe">⭐ {{ favorito.nota }}/5</div>
+                    {% else %}
+                        <div class="nc-ano-revisao-numero">—</div>
+                    {% endif %}
+                </div>
             </div>
         </div>
-    </div>
-    <div class="col-6 col-md-3">
-        <div class="card h-100 text-center">
-            <div class="card-body">
-                {% if favorito %}
-                    <a href="{% url 'detalhe' favorito.tipo favorito.object_id %}" class="fs-6 fw-bold text-decoration-none">
-                        {{ favorito.titulo_avaliado.titulo|truncatechars:22 }}
-                    </a>
-                {% else %}
-                    <div class="fs-5 fw-bold">—</div>
-                {% endif %}
-                <div class="text-muted small">{% t "perfil_favorito" %}</div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<h2 class="h4 mb-3">{% t "perfil_minhas_avaliacoes" %}</h2>
-
-<ul class="nav nav-tabs mb-3" id="abasAvaliacoes" role="tablist">
-    <li class="nav-item" role="presentation">
-        <button class="nav-link active" id="tab-filmes" data-bs-toggle="tab" data-bs-target="#painel-filmes" type="button" role="tab">
-            🎬 {% t "nav_filmes" %} ({{ avaliacoes_filmes|length }})
-        </button>
-    </li>
-    <li class="nav-item" role="presentation">
-        <button class="nav-link" id="tab-series" data-bs-toggle="tab" data-bs-target="#painel-series" type="button" role="tab">
-            📺 {% t "nav_series" %} ({{ avaliacoes_series|length }})
-        </button>
-    </li>
-    <li class="nav-item" role="presentation">
-        <button class="nav-link" id="tab-livros" data-bs-toggle="tab" data-bs-target="#painel-livros" type="button" role="tab">
-            📚 {% t "nav_livros" %} ({{ avaliacoes_livros|length }})
-        </button>
-    </li>
-</ul>
-
-<div class="tab-content" id="conteudoAbasAvaliacoes">
-    <div class="tab-pane fade show active" id="painel-filmes" role="tabpanel">
-        {% for avaliacao in avaliacoes_filmes %}
-            {% include "catalog/_avaliacao_perfil.html" %}
-        {% empty %}
-            <p class="text-muted">{% t "perfil_sem_avaliacoes" %}</p>
-        {% endfor %}
-    </div>
-    <div class="tab-pane fade" id="painel-series" role="tabpanel">
-        {% for avaliacao in avaliacoes_series %}
-            {% include "catalog/_avaliacao_perfil.html" %}
-        {% empty %}
-            <p class="text-muted">{% t "perfil_sem_avaliacoes" %}</p>
-        {% endfor %}
-    </div>
-    <div class="tab-pane fade" id="painel-livros" role="tabpanel">
-        {% for avaliacao in avaliacoes_livros %}
-            {% include "catalog/_avaliacao_perfil.html" %}
-        {% empty %}
-            <p class="text-muted">{% t "perfil_sem_avaliacoes" %}</p>
-        {% endfor %}
-    </div>
-</div>
-
-<h2 class="h4 mb-3 mt-5">{% t "watchlist_titulo" %}</h2>
-
-<ul class="nav nav-tabs mb-3" id="abasWatchlist" role="tablist">
-    <li class="nav-item" role="presentation">
-        <button class="nav-link active" id="tab-watchlist-filmes" data-bs-toggle="tab" data-bs-target="#painel-watchlist-filmes" type="button" role="tab">
-            🎬 {% t "nav_filmes" %} ({{ watchlist_filmes|length }})
-        </button>
-    </li>
-    <li class="nav-item" role="presentation">
-        <button class="nav-link" id="tab-watchlist-series" data-bs-toggle="tab" data-bs-target="#painel-watchlist-series" type="button" role="tab">
-            📺 {% t "nav_series" %} ({{ watchlist_series|length }})
-        </button>
-    </li>
-    <li class="nav-item" role="presentation">
-        <button class="nav-link" id="tab-watchlist-livros" data-bs-toggle="tab" data-bs-target="#painel-watchlist-livros" type="button" role="tab">
-            📚 {% t "nav_livros" %} ({{ watchlist_livros|length }})
-        </button>
-    </li>
-</ul>
-
-<div class="tab-content" id="conteudoAbasWatchlist">
-    <div class="tab-pane fade show active" id="painel-watchlist-filmes" role="tabpanel">
-        {% for item_watchlist in watchlist_filmes %}
-            {% include "catalog/_watchlist_item.html" %}
-        {% empty %}
-            <p class="text-muted">{% t "watchlist_vazia" %}</p>
-        {% endfor %}
-    </div>
-    <div class="tab-pane fade" id="painel-watchlist-series" role="tabpanel">
-        {% for item_watchlist in watchlist_series %}
-            {% include "catalog/_watchlist_item.html" %}
-        {% empty %}
-            <p class="text-muted">{% t "watchlist_vazia" %}</p>
-        {% endfor %}
-    </div>
-    <div class="tab-pane fade" id="painel-watchlist-livros" role="tabpanel">
-        {% for item_watchlist in watchlist_livros %}
-            {% include "catalog/_watchlist_item.html" %}
-        {% empty %}
-            <p class="text-muted">{% t "watchlist_vazia" %}</p>
-        {% endfor %}
     </div>
 </div>
 {% endblock %}

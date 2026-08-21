@@ -9,7 +9,7 @@ streaming — clicar não levava pro app certo, só causava confusão).
 Espera a variável `provedor` do contexto que chama (via {% include %}): um
 dict com "nome" e "logo_url".
 {% endcomment %}
-<span class="d-inline-flex align-items-center gap-1 border rounded px-2 py-1">
-    {% if provedor.logo_url %}<img src="{{ provedor.logo_url }}" alt="" style="width:24px;height:24px;border-radius:4px;">{% endif %}
-    <span class="small">{{ provedor.nome }}</span>
+<span class="nc-onde-item">
+    {% if provedor.logo_url %}<img class="nc-onde-item__icone" src="{{ provedor.logo_url }}" alt="">{% endif %}
+    <span class="nc-onde-item__nome">{{ provedor.nome }}</span>
 </span>

@@ -1,0 +1,19 @@
+{% load i18n_custom %}
+{% comment %}
+Cartão da aba "Quero ver" do perfil — pôster + título/ano + botão pra tirar
+da watchlist. Espera `item_watchlist` (com `.tipo` já setado pela view).
+{% endcomment %}
+<div class="nc-cartao" style="position:relative">
+    <a href="{% url 'detalhe' item_watchlist.tipo item_watchlist.object_id %}" style="display:block;text-decoration:none;color:inherit">
+        <div class="nc-cartao-poster">
+            <img src="{{ item_watchlist.titulo_lista.poster_url|default:'https://placehold.co/220x330/232532/e9e9ed?text=%20' }}"
+                 loading="lazy" alt="Pôster de {{ item_watchlist.titulo_lista.titulo }}">
+        </div>
+        <div class="nc-cartao-titulo">{{ item_watchlist.titulo_lista.titulo }}</div>
+        <div class="nc-cartao-meta">{{ item_watchlist.titulo_lista.ano_lancamento }}</div>
+    </a>
+    <form action="{% url 'alternar_watchlist' item_watchlist.tipo item_watchlist.object_id %}" method="post" style="margin-top:6px">
+        {% csrf_token %}
+        <button type="submit" class="nc-btn nc-btn-secondary nc-btn-sm nc-btn-block">{% t "watchlist_remover" %}</button>
+    </form>
+</div>

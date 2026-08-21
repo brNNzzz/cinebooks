@@ -5,86 +5,149 @@
 
 {% block conteudo %}
 {% if destaques_do_ano.itens %}
-    <div id="carrosselDestaques" class="destaque-topo carousel slide mb-4" data-bs-ride="carousel" data-bs-interval="8000">
+    <div id="carrosselDestaques" class="nc-hero-carrossel carousel slide" data-bs-ride="carousel" data-bs-interval="8000">
         <div class="carousel-inner">
             {% for item in destaques_do_ano.itens %}
                 <div class="carousel-item {% if forloop.first %}active{% endif %}">
-                    <div class="d-flex flex-column flex-md-row align-items-center gap-4 p-4 p-md-5">
-                        <img
-                            src="{{ item.poster_exibicao|default:item.poster_url|default:'https://placehold.co/300x450/1f2937/ffffff?text=Sem+imagem' }}"
-                            class="destaque-poster rounded-3 shadow flex-shrink-0" alt="Pôster de {{ item.titulo_exibicao }}">
-                        <div class="text-white destaque-info">
-                            <p class="text-uppercase small fw-semibold text-white-50 mb-1">
-                                {% if item.tipo == "filme" %}🎬 {% t "busca_filmes" %}{% elif item.tipo == "serie" %}📺 {% t "busca_series" %}{% else %}📚 {% t "busca_livros" %}{% endif %}
-                            </p>
-                            <h1 class="fw-bold mb-2">{{ item.titulo_exibicao }} <small class="text-white-50">({{ item.ano_lancamento }})</small></h1>
-                            <p class="mb-3">
-                                {% if item.nota_publico %}<span class="badge bg-warning text-dark">⭐ {{ item.nota_publico }}/10</span>{% endif %}
-                                {% if item.nota_critica %}<span class="badge bg-info text-dark">🎯 {{ item.nota_critica }}/10</span>{% endif %}
-                                {% if item.nota_rotten_tomatoes %}<span class="badge bg-danger">🍅 {{ item.nota_rotten_tomatoes }}%</span>{% endif %}
-                            </p>
-                            {% if item.sinopse_exibicao %}
-                                <p class="text-white-50">{{ item.sinopse_exibicao }}</p>
-                            {% endif %}
-                            <a href="{% url 'detalhe' item.tipo item.pk %}" class="btn btn-light">{% t "home_ver_detalhes" %}</a>
+                    <div class="nc-hero">
+                        <div class="nc-hero__linha">
+                            <div class="nc-hero__poster">
+                                <img
+                                    src="{{ item.poster_exibicao|default:item.poster_url|default:'https://placehold.co/300x450/232532/e9e9ed?text=Sem+imagem' }}"
+                                    alt="Pôster de {{ item.titulo_exibicao|default:item.titulo }}">
+                            </div>
+                            <div class="nc-hero__info">
+                                <div class="nc-hero__kicker">
+                                    <span class="nc-hero__kicker-traco"></span>
+                                    <span class="nc-hero__kicker-texto">
+                                        {% if item.tipo == "filme" %}{% t "tipo_filme" %}{% elif item.tipo == "serie" %}{% t "tipo_serie" %}{% else %}{% t "tipo_livro" %}{% endif %}
+                                    </span>
+                                </div>
+                                <h1 class="nc-hero__titulo">{{ item.titulo_exibicao|default:item.titulo }}</h1>
+                                <div class="nc-hero__meta">
+                                    <span>{{ item.ano_lancamento }}</span>
+                                    {% if item.tipo == "filme" and item.duracao_minutos %}
+                                        <span>·</span><span>{{ item.duracao_minutos }} {% t "detalhe_min_abrev" %}</span>
+                                    {% elif item.tipo == "serie" and item.numero_temporadas %}
+                                        <span>·</span><span>{{ item.numero_temporadas }} {% t "detalhe_temporadas" %}</span>
+                                    {% elif item.tipo == "livro" and item.numero_paginas %}
+                                        <span>·</span><span>{{ item.numero_paginas }} {% t "detalhe_paginas" %}</span>
+                                    {% endif %}
+                                    {% with genero=item.generos.all|first %}
+                                        {% if genero %}<span>·</span><span>{{ genero.nome|traduzir_genero:IDIOMA_ATUAL }}</span>{% endif %}
+                                    {% endwith %}
+                                </div>
+                                {% if item.nota_publico or item.nota_critica %}
+                                    <div class="nc-hero__notas">
+                                        <div class="nc-hero__notas-col">
+                                            {% if item.nota_publico %}
+                                                <div>
+                                                    <div class="nc-hero__nota-linha"><span>{% t "detalhe_publico" %}</span><span>{{ item.nota_publico }}/10</span></div>
+                                                    <div class="nc-hero__nota-trilho"><div class="nc-hero__nota-barra" style="width:{{ item.nota_publico|floatformat:0 }}0%"></div></div>
+                                                </div>
+                                            {% endif %}
+                                            {% if item.nota_critica %}
+                                                <div>
+                                                    <div class="nc-hero__nota-linha"><span>{% t "detalhe_critica" %}</span><span>{{ item.nota_critica }}/10</span></div>
+                                                    <div class="nc-hero__nota-trilho"><div class="nc-hero__nota-barra" style="width:{{ item.nota_critica|floatformat:0 }}0%"></div></div>
+                                                </div>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                {% endif %}
+                                {% if item.sinopse_exibicao %}
+                                    <p class="nc-hero__sinopse">{{ item.sinopse_exibicao|truncatechars:220 }}</p>
+                                {% endif %}
+                                <div class="nc-hero__acoes">
+                                    <a href="{% url 'detalhe' item.tipo item.pk %}" class="nc-btn nc-btn-primary">{% t "home_ver_detalhes" %}</a>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
             {% endfor %}
         </div>
         {% if destaques_do_ano.itens|length > 1 %}
-            <button class="carousel-control-prev" type="button" data-bs-target="#carrosselDestaques" data-bs-slide="prev">
-                <span class="carousel-control-prev-icon" aria-hidden="true"></span>
-            </button>
-            <button class="carousel-control-next" type="button" data-bs-target="#carrosselDestaques" data-bs-slide="next">
-                <span class="carousel-control-next-icon" aria-hidden="true"></span>
-            </button>
-            <div class="carousel-indicators">
-                {% for item in destaques_do_ano.itens %}
-                    <button type="button" data-bs-target="#carrosselDestaques" data-bs-slide-to="{{ forloop.counter0 }}" {% if forloop.first %}class="active"{% endif %}></button>
-                {% endfor %}
+            <div class="nc-hero__controles" style="padding:0 32px 24px">
+                <button class="nc-hero__seta" type="button" data-bs-target="#carrosselDestaques" data-bs-slide="prev">&larr;</button>
+                <button class="nc-hero__seta" type="button" data-bs-target="#carrosselDestaques" data-bs-slide="next">&rarr;</button>
+                <div class="nc-hero__pontos">
+                    {% for item in destaques_do_ano.itens %}
+                        <button class="nc-hero__ponto {% if forloop.first %}is-active{% endif %}" type="button" data-bs-target="#carrosselDestaques" data-bs-slide-to="{{ forloop.counter0 }}"></button>
+                    {% endfor %}
+                </div>
             </div>
         {% endif %}
     </div>
 {% endif %}
 
-{% if recomendados %}
-<div class="mb-1">
-    <h2 class="h4 mb-0">✨ {% t "home_recomendados_titulo" %}</h2>
-    <p class="text-muted small">{% t "home_recomendados_subtitulo" %}</p>
+<div class="nc-trilhas">
+    <span class="nc-trilhas__rotulo">{{ trilhas_rotulo }}</span>
+    {% for chip in trilhas_chips %}
+        <a href="{{ chip.url }}" class="nc-chip{% if chip.chave == trilha_atual %} is-active{% endif %}">{{ chip.rotulo }}</a>
+    {% endfor %}
 </div>
-<div class="row">
-    {% for item in recomendados %}{% include "catalog/_card.html" with item=item tipo=item.tipo %}{% endfor %}
+<div class="nc-secao">
+    <div class="nc-secao-cabecalho">
+        <h2 class="nc-secao-titulo">
+            {% for chip in trilhas_chips %}{% if chip.chave == trilha_atual %}{{ chip.rotulo }}{% endif %}{% endfor %}
+        </h2>
+        <a href="{% url 'lista' 'todos' %}" class="nc-nav__link" style="color:var(--color-accent-400)">{% t "ver_todos" %}</a>
+    </div>
+    <div class="nc-grade">
+        {% for item in trilha_itens %}{% include "catalog/_card.html" with item=item tipo=item.tipo %}{% empty %}
+            <p class="nc-text-muted">{% t "lista_nenhum_titulo" %}</p>
+        {% endfor %}
+    </div>
+</div>
+
+{% if recomendados %}
+<div class="nc-secao" style="padding-top:8px">
+    <div class="nc-secao-cabecalho">
+        <div>
+            <h2 class="nc-secao-titulo">✨ {% t "home_recomendados_titulo" %}</h2>
+            <p class="nc-secao-subtitulo">{% t "home_recomendados_subtitulo" %}</p>
+        </div>
+    </div>
+    <div class="nc-grade">
+        {% for item in recomendados %}{% include "catalog/_card.html" with item=item tipo=item.tipo %}{% endfor %}
+    </div>
 </div>
 {% endif %}
 
-<div class="d-flex justify-content-between align-items-center mb-4{% if recomendados %} mt-5{% endif %}">
-    <h2 class="h4 mb-0">🎬 {% t "home_filmes_recentes" %}</h2>
-    <a href="{% url 'lista' 'filme' %}" class="btn btn-sm btn-outline-primary">{% t "ver_todos" %}</a>
-</div>
-<div class="row">
-    {% for item in filmes %}{% include "catalog/_card.html" with item=item tipo="filme" %}{% empty %}
-        <p class="text-muted">{% t "nenhum_filme" %}</p>
-    {% endfor %}
-</div>
-
-<div class="d-flex justify-content-between align-items-center mb-4 mt-5">
-    <h2 class="h4 mb-0">📺 {% t "home_series_recentes" %}</h2>
-    <a href="{% url 'lista' 'serie' %}" class="btn btn-sm btn-outline-primary">{% t "ver_todas" %}</a>
-</div>
-<div class="row">
-    {% for item in series %}{% include "catalog/_card.html" with item=item tipo="serie" %}{% empty %}
-        <p class="text-muted">{% t "nenhuma_serie" %}</p>
-    {% endfor %}
+<div class="nc-secao" style="padding-top:8px">
+    <div class="nc-secao-cabecalho">
+        <h2 class="nc-secao-titulo">{% t "home_filmes_recentes" %}</h2>
+        <a href="{% url 'lista' 'filme' %}" class="nc-nav__link" style="color:var(--color-accent-400)">{% t "ver_todos" %}</a>
+    </div>
+    <div class="nc-grade">
+        {% for item in filmes %}{% include "catalog/_card.html" with item=item tipo="filme" %}{% empty %}
+            <p class="nc-text-muted">{% t "nenhum_filme" %}</p>
+        {% endfor %}
+    </div>
 </div>
 
-<div class="d-flex justify-content-between align-items-center mb-4 mt-5">
-    <h2 class="h4 mb-0">📚 {% t "home_livros_recentes" %}</h2>
-    <a href="{% url 'lista' 'livro' %}" class="btn btn-sm btn-outline-primary">{% t "ver_todos" %}</a>
+<div class="nc-secao" style="padding-top:8px">
+    <div class="nc-secao-cabecalho">
+        <h2 class="nc-secao-titulo">{% t "home_series_recentes" %}</h2>
+        <a href="{% url 'lista' 'serie' %}" class="nc-nav__link" style="color:var(--color-accent-400)">{% t "ver_todas" %}</a>
+    </div>
+    <div class="nc-grade">
+        {% for item in series %}{% include "catalog/_card.html" with item=item tipo="serie" %}{% empty %}
+            <p class="nc-text-muted">{% t "nenhuma_serie" %}</p>
+        {% endfor %}
+    </div>
 </div>
-<div class="row">
-    {% for item in livros %}{% include "catalog/_card.html" with item=item tipo="livro" %}{% empty %}
-        <p class="text-muted">{% t "nenhum_livro" %}</p>
-    {% endfor %}
+
+<div class="nc-secao" style="padding-top:8px">
+    <div class="nc-secao-cabecalho">
+        <h2 class="nc-secao-titulo">{% t "home_livros_recentes" %}</h2>
+        <a href="{% url 'lista' 'livro' %}" class="nc-nav__link" style="color:var(--color-accent-400)">{% t "ver_todos" %}</a>
+    </div>
+    <div class="nc-grade">
+        {% for item in livros %}{% include "catalog/_card.html" with item=item tipo="livro" %}{% empty %}
+            <p class="nc-text-muted">{% t "nenhum_livro" %}</p>
+        {% endfor %}
+    </div>
 </div>
 {% endblock %}

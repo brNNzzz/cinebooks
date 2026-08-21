@@ -4,60 +4,63 @@
 {% block titulo %}{{ rotulo_plural }} — CineBooks{% endblock %}
 
 {% block conteudo %}
-<h1 class="h3 mb-4">{{ rotulo_plural }}</h1>
+<div class="nc-pagina">
+    <div class="nc-filtro-barra" style="padding-top:32px">
+        <span class="nc-filtro-rotulo">{% t "nav_catalogo" %}</span>
+        {% for chip in chips_tipo %}
+            <a href="{{ chip.url }}" class="nc-chip{% if chip.chave == tipo %} is-active{% endif %}">{{ chip.rotulo }}</a>
+        {% endfor %}
+        <span class="nc-filtro-separador"></span>
+        <span class="nc-filtro-rotulo">{% t "ordem_label" %}</span>
+        {% for chip in chips_ordem %}
+            <a href="{{ chip.url }}" class="nc-chip{% if chip.chave == ordem %} is-active{% endif %}">{{ chip.rotulo }}</a>
+        {% endfor %}
+        <span class="nc-filtro-contagem">{{ pagina_info }}</span>
+    </div>
 
-<form method="get" class="row g-2 mb-4">
-    <div class="col-sm-6 col-md-3">
-        <input type="text" name="q" class="form-control" placeholder="{% t 'lista_buscar_placeholder' %}" value="{{ termo }}">
-    </div>
-    <div class="col-sm-4 col-md-3">
-        <select name="genero" class="form-select">
-            <option value="">{% t "lista_todos_generos" %}</option>
-            {% for g in generos %}
-                <option value="{{ g.id }}" {% if genero_id == g.id|stringformat:"s" %}selected{% endif %}>{{ g.nome|traduzir_genero:IDIOMA_ATUAL }}</option>
-            {% endfor %}
-        </select>
-    </div>
-    <div class="col-sm-4 col-md-2">
-        <select name="ano" class="form-select">
-            <option value="">{% t "lista_todos_anos" %}</option>
-            {% for ano in anos_disponiveis %}
-                <option value="{{ ano }}" {% if ano_selecionado == ano|stringformat:"s" %}selected{% endif %}>{{ ano }}</option>
-            {% endfor %}
-        </select>
-    </div>
-    <div class="col-sm-4 col-md-2">
-        <select name="nota_minima" class="form-select">
-            <option value="">{% t "lista_todas_notas" %}</option>
-            {% for n in "12345" %}
-                <option value="{{ n }}" {% if nota_minima == n %}selected{% endif %}>⭐ {{ n }}+</option>
-            {% endfor %}
-        </select>
-    </div>
-    <div class="col-sm-4 col-md-2">
-        <button type="submit" class="btn btn-primary w-100">{% t "lista_filtrar" %}</button>
-    </div>
-</form>
+    <details class="nc-filtro-avancado">
+        <summary>{% t "lista_filtrar" %} ({% t "lista_buscar_placeholder" %} · {% t "lista_todos_generos" %} · {% t "lista_todos_anos" %} · {% t "lista_todas_notas" %})</summary>
+        <form method="get" class="nc-filtro-avancado__corpo">
+            <input type="hidden" name="ordem" value="{{ ordem }}">
+            <input type="text" name="q" class="nc-input" placeholder="{% t 'lista_buscar_placeholder' %}" value="{{ termo }}" style="max-width:220px">
+            <select name="genero" class="nc-input" style="max-width:180px">
+                <option value="">{% t "lista_todos_generos" %}</option>
+                {% for g in generos %}
+                    <option value="{{ g.id }}" {% if genero_id == g.id|stringformat:"s" %}selected{% endif %}>{{ g.nome|traduzir_genero:IDIOMA_ATUAL }}</option>
+                {% endfor %}
+            </select>
+            <select name="ano" class="nc-input" style="max-width:130px">
+                <option value="">{% t "lista_todos_anos" %}</option>
+                {% for ano in anos_disponiveis %}
+                    <option value="{{ ano }}" {% if ano_selecionado == ano|stringformat:"s" %}selected{% endif %}>{{ ano }}</option>
+                {% endfor %}
+            </select>
+            <select name="nota_minima" class="nc-input" style="max-width:130px">
+                <option value="">{% t "lista_todas_notas" %}</option>
+                {% for n in "12345" %}
+                    <option value="{{ n }}" {% if nota_minima == n %}selected{% endif %}>{{ n }}+</option>
+                {% endfor %}
+            </select>
+            <button type="submit" class="nc-btn nc-btn-primary">{% t "lista_filtrar" %}</button>
+        </form>
+    </details>
 
-<div class="row">
-    {% for item in itens %}{% include "catalog/_card.html" with item=item tipo=tipo %}{% empty %}
-        <p class="text-muted">{% t "lista_nenhum_titulo" %}</p>
-    {% endfor %}
-</div>
+    <div class="nc-grade">
+        {% for item in itens %}{% include "catalog/_card.html" with item=item tipo=item.tipo|default:tipo %}{% empty %}
+            <p class="nc-text-muted">{% t "lista_nenhum_titulo" %}</p>
+        {% endfor %}
+    </div>
 
-{% if itens.paginator.num_pages > 1 %}
-    <nav class="d-flex justify-content-between align-items-center mt-4" aria-label="Paginação">
-        <div>
+    {% if itens.paginator.num_pages > 1 %}
+        <nav class="nc-paginacao" aria-label="Paginação">
             {% if itens.has_previous %}
-                <a href="?{{ query_sem_pagina }}&pagina={{ itens.previous_page_number }}" class="btn btn-sm btn-outline-secondary">&larr; {% t "lista_pagina_anterior" %}</a>
+                <a href="?{{ query_sem_pagina }}&pagina={{ itens.previous_page_number }}" class="nc-btn nc-btn-secondary nc-btn-sm">&larr; {% t "lista_pagina_anterior" %}</a>
             {% endif %}
-        </div>
-        <span class="text-muted small">{{ pagina_info }}</span>
-        <div>
+            <span>{{ pagina_info }}</span>
             {% if itens.has_next %}
-                <a href="?{{ query_sem_pagina }}&pagina={{ itens.next_page_number }}" class="btn btn-sm btn-outline-secondary">{% t "lista_pagina_proxima" %} &rarr;</a>
+                <a href="?{{ query_sem_pagina }}&pagina={{ itens.next_page_number }}" class="nc-btn nc-btn-secondary nc-btn-sm">{% t "lista_pagina_proxima" %} &rarr;</a>
             {% endif %}
-        </div>
-    </nav>
-{% endif %}
+        </nav>
+    {% endif %}
+</div>
 {% endblock %}

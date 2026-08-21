@@ -1,0 +1,41 @@
+{% load i18n_custom %}
+{% comment %}
+Um "cartão" da estante (abas Assistidos/Lidos do perfil) — pôster + título +
+MINHA nota (não a nota agregada do site, é por isso que não reaproveita
+_card.html direto) + editar/excluir dessa avaliação, tudo inline sem sair da
+página. Espera `avaliacao` (com `.tipo` já setado pela view) no contexto.
+{% endcomment %}
+<div class="nc-cartao" style="position:relative">
+    <a href="{% url 'detalhe' avaliacao.tipo avaliacao.object_id %}" style="display:block;text-decoration:none;color:inherit">
+        <div class="nc-cartao-poster">
+            <img src="{{ avaliacao.titulo_avaliado.poster_url|default:'https://placehold.co/220x330/232532/e9e9ed?text=%20' }}"
+                 loading="lazy" alt="Pôster de {{ avaliacao.titulo_avaliado.titulo }}">
+            <span class="nc-cartao-nota">{{ avaliacao.nota }}/5</span>
+        </div>
+        <div class="nc-cartao-titulo">{{ avaliacao.titulo_avaliado.titulo }}</div>
+        <div class="nc-cartao-meta">{{ avaliacao.titulo_avaliado.ano_lancamento }}</div>
+    </a>
+    <div style="display:flex;gap:10px;margin-top:6px">
+        <button type="button" class="nc-nav__link" style="font-size:11.5px;background:none;border:0;padding:0;cursor:pointer"
+                onclick="document.getElementById('editar-{{ avaliacao.pk }}').classList.toggle('nc-oculto')">
+            {% t "perfil_editar" %}
+        </button>
+        <form action="{% url 'excluir_avaliacao' avaliacao.pk %}" method="post"
+              onsubmit="return confirm('{% t "perfil_confirmar_exclusao" %}');">
+            {% csrf_token %}
+            <button type="submit" class="nc-nav__link" style="font-size:11.5px;background:none;border:0;padding:0;cursor:pointer">{% t "perfil_excluir" %}</button>
+        </form>
+    </div>
+    <div id="editar-{{ avaliacao.pk }}" class="nc-oculto" style="margin-top:8px">
+        <form method="post" action="{% url 'avaliar' avaliacao.tipo avaliacao.object_id %}">
+            {% csrf_token %}
+            <select name="nota" class="nc-input" style="width:100%;font-size:12px;padding:6px 8px">
+                {% for n in "12345" %}
+                    <option value="{{ n }}" {% if avaliacao.nota|stringformat:"s" == n %}selected{% endif %}>{{ n }} ★</option>
+                {% endfor %}
+            </select>
+            <textarea name="comentario" class="nc-input" style="width:100%;margin-top:6px;font-size:12px" rows="2">{{ avaliacao.comentario }}</textarea>
+            <button type="submit" class="nc-btn nc-btn-secondary nc-btn-sm nc-btn-block" style="margin-top:6px">{% t "detalhe_salvar" %}</button>
+        </form>
+    </div>
+</div>

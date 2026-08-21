@@ -1,3 +1,4 @@
+import datetime
 import logging
 import threading
 from collections import Counter
@@ -14,6 +15,7 @@ from django.db.models import Avg, Count, Q
 from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_POST
 
 from . import busca_externa
@@ -281,6 +283,77 @@ def _destaques_do_ano(idioma_atual=None):
 ITENS_POR_FILEIRA_HOME = 12
 
 
+# "Trilhas": fileira de chips no topo da home (abaixo do carrossel de
+# destaque) que troca o conteúdo da grade logo abaixo — cada uma é um
+# recorte diferente do catálogo (o que está em alta, o que estreou essa
+# semana, o que já tem streaming disponível...). Só filme/série entram
+# (livro não tem duração/streaming/nota de crítica pra maioria dessas
+# contas fazerem sentido) — livros continuam com a fileira própria mais
+# abaixo na home ("Livros recentes").
+TRILHAS = ["em_alta", "estreias_semana", "com_streaming", "ate_100_min", "critica_publico"]
+LIMITE_TRILHA = 6
+
+
+def _itens_filme_serie_lancados(ano_atual):
+    itens = []
+    for tipo, model in (("filme", Filme), ("serie", Serie)):
+        for item in model.objects.filter(ano_lancamento__lte=ano_atual):
+            item.tipo = tipo
+            itens.append(item)
+    return itens
+
+
+def _trilha_em_alta(itens, ano_atual):
+    candidatos = [i for i in itens if i.nota_publico is not None]
+    candidatos.sort(key=lambda i: -i.nota_publico)
+    return candidatos[:LIMITE_TRILHA]
+
+
+def _trilha_estreias_semana(itens, ano_atual):
+    hoje = timezone.localdate()
+    ha_uma_semana = hoje - datetime.timedelta(days=7)
+    candidatos = [i for i in itens if i.data_lancamento and ha_uma_semana <= i.data_lancamento <= hoje]
+    if not candidatos:
+        # Sem nenhum lançamento nos últimos 7 dias (comum num catálogo
+        # pequeno de projeto de faculdade) — cai pros lançamentos do ano
+        # civil atual, mais recentes primeiro, em vez de mostrar uma
+        # trilha vazia.
+        candidatos = [i for i in itens if i.ano_lancamento == timezone.now().year]
+    candidatos.sort(
+        key=lambda i: i.data_lancamento or datetime.date(i.ano_lancamento, 1, 1), reverse=True
+    )
+    return candidatos[:LIMITE_TRILHA]
+
+
+def _trilha_com_streaming(itens, ano_atual):
+    candidatos = [i for i in itens if (i.onde_assistir or {}).get("streaming")]
+    candidatos.sort(key=lambda i: (i.nota_publico is None, -(i.nota_publico or 0)))
+    return candidatos[:LIMITE_TRILHA]
+
+
+def _trilha_ate_100_min(itens, ano_atual):
+    # Duração só existe no modelo Filme (série tem número de temporadas, não
+    # duração) — essa trilha, então, só tem filme, nunca série.
+    candidatos = [i for i in itens if i.tipo == "filme" and i.duracao_minutos and i.duracao_minutos <= 100]
+    candidatos.sort(key=lambda i: i.duracao_minutos)
+    return candidatos[:LIMITE_TRILHA]
+
+
+def _trilha_critica_publico(itens, ano_atual):
+    candidatos = [i for i in itens if i.nota_publico is not None and i.nota_critica is not None]
+    candidatos.sort(key=lambda i: -abs(i.nota_publico - i.nota_critica))
+    return candidatos[:LIMITE_TRILHA]
+
+
+TRILHA_FUNCOES = {
+    "em_alta": _trilha_em_alta,
+    "estreias_semana": _trilha_estreias_semana,
+    "com_streaming": _trilha_com_streaming,
+    "ate_100_min": _trilha_ate_100_min,
+    "critica_publico": _trilha_critica_publico,
+}
+
+
 def home(request):
     # Mesmo cuidado do _destaques_do_ano (ver comentário lá): sem esse
     # filtro, um título anunciado mas que ainda nem lançou (ex: uma
@@ -327,12 +400,37 @@ def home(request):
         recomendados = recomendar_para_usuario(request.user, limite=LIMITE_RECOMENDACOES)
         _aplicar_exibicao([(item, item.tipo) for item in recomendados], idioma_tmdb_atual)
 
+    # Trilha ativa (chip escolhido pelo usuário no topo da home, logo abaixo
+    # do carrossel de destaque) — sem escolha nenhuma, cai na primeira
+    # ("Em alta"). Um valor inválido na URL (?trilha=xyz) também cai nela,
+    # em vez de dar erro.
+    trilha_atual = request.GET.get("trilha")
+    if trilha_atual not in TRILHAS:
+        trilha_atual = TRILHAS[0]
+    base_trilhas = _itens_filme_serie_lancados(ano_atual)
+    trilha_itens = TRILHA_FUNCOES[trilha_atual](base_trilhas, ano_atual)
+    _aplicar_exibicao([(item, item.tipo) for item in trilha_itens], idioma_tmdb_atual)
+    idioma_atual = _idioma_atual(request)
+    trilhas_chips = [
+        {
+            "chave": chave,
+            "rotulo": traduzir(f"trilha_{chave}", idioma_atual),
+            "url": f"/?trilha={chave}",
+        }
+        for chave in TRILHAS
+    ]
+    trilhas_rotulo = traduzir("trilhas_rotulo", idioma_atual)
+
     contexto = {
         "destaques_do_ano": _destaques_do_ano(idioma_tmdb_atual),
         "recomendados": recomendados,
         "filmes": filmes,
         "series": series,
         "livros": livros,
+        "trilha_itens": trilha_itens,
+        "trilhas_chips": trilhas_chips,
+        "trilha_atual": trilha_atual,
+        "trilhas_rotulo": trilhas_rotulo,
     }
     return render(request, "catalog/home.html", contexto)
 
@@ -342,97 +440,182 @@ def home(request):
 # página fique gigante e lenta de rolar se o catálogo crescer bastante.
 ITENS_POR_PAGINA = 12
 
+# Ordens disponíveis no catálogo (chip "Ordem" no topo da listagem). A
+# ordem PADRÃO ("estreia") é a mesma de sempre (mais recente primeiro,
+# empate por título) — importante manter assim pra não mudar o
+# comportamento de quem já usava a página sem escolher nenhuma ordem.
+ORDENS = ["estreia", "nota", "divergencia"]
 
-def lista(request, tipo):
-    info = TIPOS.get(tipo)
-    if info is None:
-        raise Http404("Categoria não encontrada")
-    idioma_atual = _idioma_atual(request)
-    ano_atual = timezone.now().year
 
-    # Mesma regra da home (ver views.home): não faz sentido o catálogo
-    # mostrar uma "continuação anunciada" com ano de lançamento lá no
-    # futuro (ex: "Avatar 5", cadastrado com ano_lancamento=2034) — só
-    # entra quem já lançou ou lança até o fim do ano civil atual. Aplicado
-    # aqui na consulta BASE (antes de qualquer outro filtro) pra também
-    # não aparecer nas abas "Filmes"/"Séries"/"Livros", não só na home.
-    queryset = _com_media(info["model"].objects.filter(ano_lancamento__lte=ano_atual))
+def _divergencia(item):
+    """Diferença absoluta entre a nota do público e a da crítica (ambas
+    vindas da internet, via OMDb) — usada na ordem "Divergência", pra achar
+    os títulos onde o público e a crítica mais discordam. Devolve None
+    quando falta uma das duas notas (a maioria dos livros, por exemplo,
+    nunca tem nota de crítica) — esses ficam sempre por último nessa
+    ordem, não fazem sentido nela."""
+    if item.nota_publico is None or item.nota_critica is None:
+        return None
+    return abs(item.nota_publico - item.nota_critica)
 
-    termo = request.GET.get("q", "").strip()
-    if termo:
-        queryset = queryset.filter(titulo__icontains=termo)
 
-    genero_id = request.GET.get("genero", "").strip()
-    if genero_id:
-        queryset = queryset.filter(generos__id=genero_id)
+def _ordenar_itens(itens, ordem):
+    """Ordena uma lista (já materializada) de títulos — usada tanto pra um
+    tipo só quanto pro catálogo "todos" (que mistura filme/série/livro e
+    por isso não dá pra ordenar só com `.order_by()` do Django, que só
+    funciona dentro de UM queryset de UM modelo por vez)."""
+    if ordem == "nota":
+        # Nota da própria comunidade do CineBooks (media_notas, a mesma
+        # que aparece na estrelinha do card) — sem nota nenhuma fica por
+        # último, em vez de sumir da lista.
+        itens.sort(key=lambda i: (i.media_notas is None, -(i.media_notas or 0)))
+    elif ordem == "divergencia":
+        itens.sort(key=lambda i: (_divergencia(i) is None, -(_divergencia(i) or 0)))
+    else:
+        itens.sort(key=lambda i: (-(i.ano_lancamento or 0), i.titulo))
+    return itens
 
-    # Lista de anos que existem de verdade nesse tipo de título, pra montar
-    # o <select> de ano — calculada ANTES de aplicar o filtro de ano em si
-    # (senão, depois de escolher um ano, o dropdown ficaria só com aquela
-    # opção, sem jeito de voltar pra "todos os anos" olhando as outras).
-    # Também limitada até o ano atual, pelo mesmo motivo acima: sem isso, o
-    # <select> ofereceria anos "fantasma" (tipo 2034) que nem aparecem na
-    # lista, então escolher esse ano só mostraria uma página vazia.
+
+def _itens_filtrados(model, tipo, ano_atual, termo, genero_id, ano, nota_minima):
+    """Aplica os filtros (busca por título, gênero, ano, nota mínima) num
+    modelo (Filme/Serie/Livro) e devolve (lista_de_itens, anos_disponiveis)
+    já com `.tipo`/`.media_notas`/`.qtd_avaliacoes` prontos em cada item —
+    usada tanto pro catálogo de UM tipo só quanto, chamada 3 vezes, pro
+    catálogo "todos" (ver `lista()` abaixo)."""
+    # Mesma regra da home (ver views.home): não mostra título com ano de
+    # lançamento no FUTURO (ex: uma continuação só anunciada).
+    queryset = _com_media(model.objects.filter(ano_lancamento__lte=ano_atual))
+
     anos_disponiveis = list(
-        info["model"]
-        .objects.filter(ano_lancamento__lte=ano_atual)
+        model.objects.filter(ano_lancamento__lte=ano_atual)
         .order_by("-ano_lancamento")
         .values_list("ano_lancamento", flat=True)
         .distinct()
     )
 
-    ano = request.GET.get("ano", "").strip()
+    if termo:
+        queryset = queryset.filter(titulo__icontains=termo)
+    if genero_id:
+        queryset = queryset.filter(generos__id=genero_id)
     if ano:
         queryset = queryset.filter(ano_lancamento=ano)
+    if nota_minima is not None:
+        queryset = queryset.filter(media_notas__gte=nota_minima)
+
+    # O filtro de gênero faz um JOIN (muitos-pra-muitos): sem o distinct(),
+    # um título com mais de um gênero que bate no filtro apareceria
+    # REPETIDO, uma vez pra cada gênero dele.
+    itens = list(queryset.distinct())
+    for item in itens:
+        item.tipo = tipo
+    return itens, anos_disponiveis
+
+
+def lista(request, tipo):
+    # "todos" é um "tipo" especial (não é um model de verdade, ver TIPOS):
+    # mistura filme + série + livro num catálogo só, com um chip "Tipo"
+    # pra filtrar. Qualquer outro tipo desconhecido continua dando 404.
+    if tipo != "todos" and TIPOS.get(tipo) is None:
+        raise Http404("Categoria não encontrada")
+    idioma_atual = _idioma_atual(request)
+    ano_atual = timezone.now().year
+
+    termo = request.GET.get("q", "").strip()
+    genero_id = request.GET.get("genero", "").strip()
+    ano = request.GET.get("ano", "").strip()
 
     # Nota mínima do PÚBLICO DO SITE (média das avaliações daqui, o mesmo
     # número que aparece na estrelinha do card) — não confundir com
     # nota_publico, que é a nota vinda da internet (IMDb/Open Library).
-    nota_minima = request.GET.get("nota_minima", "").strip()
-    if nota_minima:
+    nota_minima_str = request.GET.get("nota_minima", "").strip()
+    nota_minima_valor = None
+    if nota_minima_str:
         try:
-            queryset = queryset.filter(media_notas__gte=float(nota_minima))
+            nota_minima_valor = float(nota_minima_str)
         except ValueError:
-            nota_minima = ""  # valor inválido na URL — ignora em vez de quebrar a página
+            nota_minima_str = ""  # valor inválido na URL — ignora em vez de quebrar a página
 
-    # O filtro de gênero acima faz um JOIN com a tabela de gêneros (relação
-    # muitos-pra-muitos): sem o distinct(), um título com mais de um gênero
-    # cadastrado apareceria REPETIDO na lista, uma vez pra cada gênero dele.
-    queryset = queryset.distinct()
+    ordem = request.GET.get("ordem", "").strip()
+    if ordem not in ORDENS:
+        ordem = ORDENS[0]
 
-    # Reforça a ordem explicitamente (mais recente primeiro, empate por
-    # título): o `_com_media` acima faz um annotate() com Avg/Count, e
-    # sempre que isso acontece o Django deixa de aplicar sozinho a ordenação
-    # padrão do modelo (`Meta.ordering`, lá em Titulo) — sem essa linha, a
-    # ordem virava praticamente aleatória (a do banco), e pior ainda: cada
-    # PÁGINA da paginação podia repetir ou pular títulos, porque a ordem
-    # mudava a cada consulta.
-    queryset = queryset.order_by("-ano_lancamento", "titulo")
+    if tipo == "todos":
+        tipos_a_buscar = list(TIPOS.items())
+    else:
+        tipos_a_buscar = [(tipo, TIPOS[tipo])]
 
-    paginator = Paginator(queryset, ITENS_POR_PAGINA)
+    itens = []
+    anos_disponiveis = set()
+    for tipo_item, info_item in tipos_a_buscar:
+        itens_do_tipo, anos_do_tipo = _itens_filtrados(
+            info_item["model"], tipo_item, ano_atual, termo, genero_id, ano, nota_minima_valor
+        )
+        itens.extend(itens_do_tipo)
+        anos_disponiveis.update(anos_do_tipo)
+    anos_disponiveis = sorted(anos_disponiveis, reverse=True)
+
+    _ordenar_itens(itens, ordem)
+
+    paginator = Paginator(itens, ITENS_POR_PAGINA)
     pagina = paginator.get_page(request.GET.get("pagina"))
 
     # Título/sinopse/pôster no idioma da navegação — só pros itens dessa
     # PÁGINA (a paginação já limita pra ITENS_POR_PAGINA de cada vez, então
     # isso nunca traduz o catálogo inteiro de uma vez só).
-    _aplicar_exibicao([(item, tipo) for item in pagina], _idioma_tmdb_atual(request))
+    _aplicar_exibicao([(item, item.tipo) for item in pagina], _idioma_tmdb_atual(request))
 
     # Pra trocar de página SEM perder os filtros já escolhidos (busca,
-    # gênero, ano, nota mínima) — os links "anterior"/"próxima" do template
-    # usam essa string pra montar a URL completa (?q=...&genero=...&pagina=N).
+    # gênero, ano, nota mínima, ordem) — os links "anterior"/"próxima" do
+    # template usam essa string pra montar a URL completa.
     parametros = request.GET.copy()
     parametros.pop("pagina", None)
 
+    rotulo_plural = (
+        traduzir("nav_catalogo", idioma_atual)
+        if tipo == "todos"
+        else traduzir(TIPOS[tipo]["rotulo_plural_chave"], idioma_atual)
+    )
+
+    # Chips "Tipo" (Todos/Filme/Série/Livro) e "Ordem" (Estreia/Nota/
+    # Divergência), cada um já com o link pronto (preservando os outros
+    # filtros da URL, só trocando o que aquele chip representa).
+    parametros_sem_pagina = request.GET.copy()
+    parametros_sem_pagina.pop("pagina", None)
+
+    def _link_tipo(novo_tipo):
+        query = parametros_sem_pagina.urlencode()
+        return f"/{novo_tipo}/" + (f"?{query}" if query else "")
+
+    def _link_ordem(nova_ordem):
+        params = parametros_sem_pagina.copy()
+        params["ordem"] = nova_ordem
+        return f"?{params.urlencode()}"
+
+    chips_tipo = [{"chave": "todos", "rotulo": traduzir("filtro_todos", idioma_atual), "url": _link_tipo("todos")}]
+    for chave_tipo, info_tipo in TIPOS.items():
+        chips_tipo.append({
+            "chave": chave_tipo,
+            "rotulo": traduzir(info_tipo["rotulo_plural_chave"], idioma_atual),
+            "url": _link_tipo(chave_tipo),
+        })
+    chips_ordem = [
+        {"chave": chave, "rotulo": traduzir(f"ordem_{chave}", idioma_atual), "url": _link_ordem(chave)}
+        for chave in ORDENS
+    ]
+
     contexto = {
         "tipo": tipo,
-        "rotulo_plural": traduzir(info["rotulo_plural_chave"], idioma_atual),
+        "rotulo_plural": rotulo_plural,
         "itens": pagina,
         "generos": Genero.objects.all(),
         "termo": termo,
         "genero_id": genero_id,
         "anos_disponiveis": anos_disponiveis,
         "ano_selecionado": ano,
-        "nota_minima": nota_minima,
+        "nota_minima": nota_minima_str,
+        "ordem": ordem,
+        "chips_tipo": chips_tipo,
+        "chips_ordem": chips_ordem,
         "query_sem_pagina": parametros.urlencode(),
         # Texto pronto ("Página 2 de 5") já formatado aqui na view, porque a
         # tag de template `{% t %}` só devolve o texto traduzido — não tem
@@ -1394,6 +1577,12 @@ def perfil(request):
         "watchlist_series": watchlist_por_tipo["serie"],
         "watchlist_livros": watchlist_por_tipo["livro"],
         "total_watchlist": len(itens_watchlist),
+        # Só pros 2 números do topo do perfil redesenhado ("assistidos" e
+        # "lidos") — filme/série contam como "assistido", livro como
+        # "lido". Aditivos de propósito (não mudam nem removem nenhuma das
+        # chaves acima, todas continuam exatamente como antes).
+        "total_assistidos": len(avaliacoes_por_tipo["filme"]) + len(avaliacoes_por_tipo["serie"]),
+        "total_lidos": len(avaliacoes_por_tipo["livro"]),
     }
     return render(request, "catalog/perfil.html", contexto)
 
@@ -1403,10 +1592,23 @@ def perfil(request):
 def excluir_avaliacao(request, avaliacao_id):
     """Apaga uma avaliação — só o próprio autor pode apagar a dele (o
     get_object_or_404 com usuario=request.user garante isso: se o ID for de
-    outra pessoa, dá 404 em vez de deixar apagar)."""
+    outra pessoa, dá 404 em vez de deixar apagar).
+
+    Usada tanto no perfil (lista de "minhas avaliações", sem passar
+    "proximo" — cai no comportamento de sempre, volta pro perfil) quanto na
+    página de detalhe (widget de estrelas: reclicar na mesma estrela desfaz
+    a avaliação e a pessoa deve continuar na MESMA página de detalhe, não
+    ser jogada pro perfil — por isso o campo escondido "proximo" no form de
+    lá). `url_has_allowed_host_and_scheme` evita que "proximo" vire um
+    redirecionamento aberto pra outro site."""
     avaliacao = get_object_or_404(Avaliacao, pk=avaliacao_id, usuario=request.user)
     avaliacao.delete()
     messages.success(request, traduzir("avaliacao_removida", _idioma_atual(request)))
+    proximo = request.POST.get("proximo")
+    if proximo and url_has_allowed_host_and_scheme(
+        proximo, allowed_hosts={request.get_host()}, require_https=request.is_secure()
+    ):
+        return redirect(proximo)
     return redirect("perfil")
 
 

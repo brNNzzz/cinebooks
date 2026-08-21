@@ -1,35 +1,84 @@
 {% extends "base.html" %}
 {% load i18n_custom %}
 
-{% block titulo %}Busca — CineBooks{% endblock %}
+{% block titulo %}{% t "busca_resultados_para" %} "{{ termo }}" — CineBooks{% endblock %}
 
 {% block conteudo %}
-<h1 class="h3 mb-4">{% t "busca_resultados_para" %} "{{ termo }}"</h1>
+<div class="nc-pagina nc-busca-topo">
+    <h1 class="nc-secao-titulo" style="font-size:24px">{% t "busca_resultados_para" %} "{{ termo }}"</h1>
 
-{% if not termo %}
-    <p class="text-muted">{% t "busca_digite" %}</p>
-{% else %}
-    <p class="text-muted small">{% t "busca_dica" %}</p>
+    {% if not termo %}
+        <p class="nc-text-muted" style="margin-top:14px">{% t "busca_digite" %}</p>
+    {% else %}
+        <div class="nc-busca-cabecalho">
+            <span class="nc-busca-contagem">{% t "busca_dica" %}</span>
+        </div>
 
-    <h2 class="h5">{% t "busca_filmes" %}</h2>
-    <div class="row mb-3">
-        {% for item in resultados.filmes %}{% include "catalog/_card.html" with item=item tipo="filme" %}{% empty %}
-            <p class="text-muted">{% t "busca_nenhum_filme" %}</p>
-        {% endfor %}
-    </div>
+        <div class="nc-busca-grupo">
+            <div class="nc-busca-grupo__cabecalho">
+                <h3 class="nc-busca-grupo__titulo">{% t "busca_filmes" %}</h3>
+                <span class="nc-busca-grupo__contagem">{{ resultados.filmes|length }}</span>
+            </div>
+            {% for item in resultados.filmes %}
+                <a href="{% url 'detalhe' 'filme' item.pk %}" class="nc-busca-linha">
+                    <img class="nc-busca-linha__poster"
+                         src="{{ item.poster_exibicao|default:item.poster_url|default:'https://placehold.co/88x132/232532/e9e9ed?text=%20' }}"
+                         loading="lazy" alt="">
+                    <div class="nc-busca-linha__corpo">
+                        <div class="nc-busca-linha__titulo">{{ item.titulo_exibicao|default:item.titulo }}</div>
+                        <div class="nc-busca-linha__meta">{{ item.ano_lancamento }}</div>
+                    </div>
+                    {% if item.media_notas %}<span class="nc-busca-linha__nota">{{ item.media_notas|floatformat:1 }}</span>{% endif %}
+                    <span class="nc-tag nc-tag-outline">{% t "tipo_filme" %}</span>
+                </a>
+            {% empty %}
+                <p class="nc-busca-vazio">{% t "busca_nenhum_filme" %}</p>
+            {% endfor %}
+        </div>
 
-    <h2 class="h5">{% t "busca_series" %}</h2>
-    <div class="row mb-3">
-        {% for item in resultados.series %}{% include "catalog/_card.html" with item=item tipo="serie" %}{% empty %}
-            <p class="text-muted">{% t "busca_nenhuma_serie" %}</p>
-        {% endfor %}
-    </div>
+        <div class="nc-busca-grupo">
+            <div class="nc-busca-grupo__cabecalho">
+                <h3 class="nc-busca-grupo__titulo">{% t "busca_series" %}</h3>
+                <span class="nc-busca-grupo__contagem">{{ resultados.series|length }}</span>
+            </div>
+            {% for item in resultados.series %}
+                <a href="{% url 'detalhe' 'serie' item.pk %}" class="nc-busca-linha">
+                    <img class="nc-busca-linha__poster"
+                         src="{{ item.poster_exibicao|default:item.poster_url|default:'https://placehold.co/88x132/232532/e9e9ed?text=%20' }}"
+                         loading="lazy" alt="">
+                    <div class="nc-busca-linha__corpo">
+                        <div class="nc-busca-linha__titulo">{{ item.titulo_exibicao|default:item.titulo }}</div>
+                        <div class="nc-busca-linha__meta">{{ item.ano_lancamento }}</div>
+                    </div>
+                    {% if item.media_notas %}<span class="nc-busca-linha__nota">{{ item.media_notas|floatformat:1 }}</span>{% endif %}
+                    <span class="nc-tag nc-tag-outline">{% t "tipo_serie" %}</span>
+                </a>
+            {% empty %}
+                <p class="nc-busca-vazio">{% t "busca_nenhuma_serie" %}</p>
+            {% endfor %}
+        </div>
 
-    <h2 class="h5">{% t "busca_livros" %}</h2>
-    <div class="row mb-3">
-        {% for item in resultados.livros %}{% include "catalog/_card.html" with item=item tipo="livro" %}{% empty %}
-            <p class="text-muted">{% t "busca_nenhum_livro" %}</p>
-        {% endfor %}
-    </div>
-{% endif %}
+        <div class="nc-busca-grupo">
+            <div class="nc-busca-grupo__cabecalho">
+                <h3 class="nc-busca-grupo__titulo">{% t "busca_livros" %}</h3>
+                <span class="nc-busca-grupo__contagem">{{ resultados.livros|length }}</span>
+            </div>
+            {% for item in resultados.livros %}
+                <a href="{% url 'detalhe' 'livro' item.pk %}" class="nc-busca-linha">
+                    <img class="nc-busca-linha__poster"
+                         src="{{ item.poster_exibicao|default:item.poster_url|default:'https://placehold.co/88x132/232532/e9e9ed?text=%20' }}"
+                         loading="lazy" alt="">
+                    <div class="nc-busca-linha__corpo">
+                        <div class="nc-busca-linha__titulo">{{ item.titulo_exibicao|default:item.titulo }}</div>
+                        <div class="nc-busca-linha__meta">{{ item.ano_lancamento }}</div>
+                    </div>
+                    {% if item.media_notas %}<span class="nc-busca-linha__nota">{{ item.media_notas|floatformat:1 }}</span>{% endif %}
+                    <span class="nc-tag nc-tag-outline">{% t "tipo_livro" %}</span>
+                </a>
+            {% empty %}
+                <p class="nc-busca-vazio">{% t "busca_nenhum_livro" %}</p>
+            {% endfor %}
+        </div>
+    {% endif %}
+</div>
 {% endblock %}
