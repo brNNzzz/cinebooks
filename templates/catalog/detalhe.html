@@ -12,7 +12,10 @@
              src="{{ item.poster_exibicao|default:item.poster_url|default:'https://placehold.co/340x510/232532/e9e9ed?text=Sem+imagem' }}"
              alt="Pôster de {{ item.titulo_exibicao }}">
         <div class="nc-detalhe-info">
-            <div class="nc-detalhe-tipo">{{ rotulo }}</div>
+            <div class="nc-detalhe-tipo">
+                {{ rotulo }}
+                {% if tipo == "filme" and em_cartaz %}<span class="nc-tag nc-tag-accent" style="margin-left:8px;vertical-align:1px">{% t "detalhe_em_cartaz" %}</span>{% endif %}
+            </div>
             <h1 class="nc-detalhe-titulo">{{ item.titulo_exibicao }}</h1>
             <div class="nc-detalhe-meta">
                 <span>{{ item.ano_lancamento }}</span>
@@ -67,6 +70,9 @@
             <div class="nc-detalhe-acoes">
                 {% if item.trailer_exibicao %}
                     <a href="{{ item.trailer_exibicao }}" target="_blank" rel="noopener" class="nc-btn nc-btn-primary">{% t "detalhe_assistir_trailer" %}</a>
+                {% endif %}
+                {% if tipo == "filme" and em_cartaz %}
+                    <a href="{{ link_ingresso }}" target="_blank" rel="noopener" class="nc-btn nc-btn-primary">🎟 {% t "detalhe_comprar_ingresso" %}</a>
                 {% endif %}
                 {% if user.is_authenticated %}
                     <form action="{% url 'alternar_watchlist' tipo item.pk %}" method="post">
@@ -185,9 +191,9 @@
         </div>
     </div>
 
-    {% if tipo == "filme" or tipo == "serie" %}
-        {% if item.onde_assistir.streaming or item.onde_assistir.aluguel or item.onde_assistir.compra %}
-            <div>
+    {% if adaptacoes or item.onde_assistir.streaming or item.onde_assistir.aluguel or item.onde_assistir.compra %}
+        <div>
+            {% if item.onde_assistir.streaming or item.onde_assistir.aluguel or item.onde_assistir.compra %}
                 <div class="nc-card-lateral">
                     <div class="nc-notas-internet__titulo">{% t "onde_assistir_titulo" %}</div>
 
@@ -210,8 +216,28 @@
                         </div>
                     {% endif %}
                 </div>
-            </div>
-        {% endif %}
+            {% endif %}
+
+            {% if adaptacoes %}
+                <div class="nc-card-lateral nc-card-lateral--adaptacao">
+                    <div class="nc-notas-internet__titulo">
+                        {% if tipo == "livro" %}{% t "adaptacao_do_livro_titulo" %}{% else %}{% t "adaptacao_do_livro_a_tela_titulo" %}{% endif %}
+                    </div>
+                    <div class="nc-adaptacao-lista">
+                        {% for alvo in adaptacoes %}
+                            <a href="{% url 'detalhe' alvo.tipo alvo.pk %}" class="nc-adaptacao-item">
+                                <img src="{{ alvo.poster_url|default:'https://placehold.co/120x180/232532/e9e9ed?text=%20' }}"
+                                     loading="lazy" alt="Pôster de {{ alvo.titulo }}">
+                                <span>
+                                    <span class="nc-adaptacao-item__titulo">{{ alvo.titulo }}</span>
+                                    <span class="nc-adaptacao-item__meta">{{ alvo.ano_lancamento }} · {% t alvo.rotulo_chave %}</span>
+                                </span>
+                            </a>
+                        {% endfor %}
+                    </div>
+                </div>
+            {% endif %}
+        </div>
     {% endif %}
 </div>
 {% endblock %}

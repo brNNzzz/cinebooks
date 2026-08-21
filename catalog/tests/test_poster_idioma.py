@@ -32,6 +32,7 @@ sem imagem.
 
 from unittest.mock import patch
 
+from django.core.management import call_command
 from django.test import SimpleTestCase, TestCase
 
 from catalog import busca_externa, views
@@ -218,3 +219,47 @@ class BuscarTraducaoAgoraCacheiaPosterTest(TestCase):
             self.assertEqual(mock_busca.call_count, 1)  # só UMA chamada à API
 
         self.assertEqual(url, "https://exemplo.com/capa-pt.jpg")
+
+
+class CacheAntigoSemPosterEReprocessadoTest(TestCase):
+    """Regressão: entradas cacheadas ANTES do pôster por idioma existir
+    (formato "v": 2, sem a chave "poster_url") ficavam presas pra sempre no
+    pôster de fallback — `_texto_no_idioma`/`_traduzir_varios` só disparam
+    busca nova quando NÃO existe cache pra aquele idioma, não quando existe
+    mas está incompleto. A correção bumped a versão do cache pra 3; o
+    comando `limpar_cache_traducoes` (rodado a cada deploy) descarta essas
+    entradas "v": 2 antigas, forçando uma busca nova que já inclui o
+    pôster."""
+
+    def setUp(self):
+        self.filme = criar_filme(
+            idioma_tmdb_conteudo="en-US",
+            poster_url="https://exemplo.com/original-en.jpg",
+            id_externo="12345",
+        )
+
+    def test_limpeza_descarta_entrada_v2_sem_poster_e_proxima_visita_busca_de_novo(self):
+        # Entrada "v": 2 pré-pôster — tem título/sinopse, mas nunca teve a
+        # chance de guardar "poster_url" (a chave nem existe).
+        self.filme.traducoes = {"zh-CN": {"titulo": "标题", "sinopse": "Sinopse.", "v": 2}}
+        self.filme.save()
+
+        call_command("limpar_cache_traducoes")
+        self.filme.refresh_from_db()
+        self.assertEqual(self.filme.traducoes, {})
+
+        # Próxima visita nesse idioma: sem cache nenhum agora, então busca
+        # de novo — e dessa vez o TMDB tem uma capa própria pra esse
+        # idioma, que finalmente é cacheada e exibida.
+        resposta_simulada = {
+            "titulo": "标题",
+            "sinopse": "Sinopse.",
+            "poster_no_idioma": "https://exemplo.com/capa-zh.jpg",
+        }
+        with patch("catalog.views.busca_externa.detalhes_filme", return_value=resposta_simulada):
+            views._texto_no_idioma(self.filme, "filme", "zh-CN")
+            self.filme.refresh_from_db()
+            url = views._poster_no_idioma(self.filme, "filme", "zh-CN")
+
+        self.assertEqual(url, "https://exemplo.com/capa-zh.jpg")
+        self.assertEqual(self.filme.traducoes["zh-CN"]["v"], 3)

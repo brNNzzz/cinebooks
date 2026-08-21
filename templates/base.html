@@ -26,6 +26,7 @@
         <a class="nc-nav__brand" href="{% url 'home' %}">CINEBOOKS</a>
         <div class="nc-nav__links">
             <a class="nc-nav__link" href="{% url 'lista' 'todos' %}" {% if request.resolver_match.url_name == 'lista' %}aria-current="page"{% endif %}>{% t "nav_catalogo" %}</a>
+            <a class="nc-nav__link" href="{% url 'adaptacoes' %}" {% if request.resolver_match.url_name == 'adaptacoes' %}aria-current="page"{% endif %}>{% t "nav_adaptacoes" %}</a>
             {% if user.is_staff %}
                 <a class="nc-nav__link" href="{% url 'importar_buscar' %}">{% t "nav_adicionar_titulo" %}</a>
                 <a class="nc-nav__link" href="/admin/">{% t "nav_admin" %}</a>
@@ -76,6 +77,7 @@
             <a href="{% url 'home' %}" {% if request.resolver_match.url_name == 'home' %}class="is-active"{% endif %}>{% t "nav_tab_inicio" %}</a>
             <a href="{% url 'busca' %}" {% if request.resolver_match.url_name == 'busca' %}class="is-active"{% endif %}>{% t "nav_tab_buscar" %}</a>
             <a href="{% url 'lista' 'todos' %}" {% if request.resolver_match.url_name == 'lista' %}class="is-active"{% endif %}>{% t "nav_catalogo" %}</a>
+            <a href="{% url 'adaptacoes' %}" {% if request.resolver_match.url_name == 'adaptacoes' %}class="is-active"{% endif %}>{% t "nav_adaptacoes" %}</a>
             <a href="{% url 'perfil' %}" {% if request.resolver_match.url_name == 'perfil' %}class="is-active"{% endif %}>{% t "nav_estante" %}</a>
         </nav>
     {% else %}
@@ -83,6 +85,7 @@
             <a href="{% url 'home' %}" {% if request.resolver_match.url_name == 'home' %}class="is-active"{% endif %}>{% t "nav_tab_inicio" %}</a>
             <a href="{% url 'busca' %}" {% if request.resolver_match.url_name == 'busca' %}class="is-active"{% endif %}>{% t "nav_tab_buscar" %}</a>
             <a href="{% url 'lista' 'todos' %}" {% if request.resolver_match.url_name == 'lista' %}class="is-active"{% endif %}>{% t "nav_catalogo" %}</a>
+            <a href="{% url 'adaptacoes' %}" {% if request.resolver_match.url_name == 'adaptacoes' %}class="is-active"{% endif %}>{% t "nav_adaptacoes" %}</a>
             <a href="{% url 'login' %}">{% t "nav_entrar" %}</a>
         </nav>
     {% endif %}

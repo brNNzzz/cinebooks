@@ -18,10 +18,11 @@ from django.utils import timezone
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_POST
 
+from . import adaptacoes as adaptacoes_matching
 from . import busca_externa
 from .forms import AvaliacaoForm, RegistroForm
 from .i18n import IDIOMA_PADRAO, IDIOMAS, traduzir
-from .models import Avaliacao, Busca, Filme, Genero, Livro, Pessoa, QueroVer, Serie
+from .models import Adaptacao, Avaliacao, Busca, Filme, Genero, Livro, Pessoa, QueroVer, Serie
 from .recomendacoes import LIMITE_RECOMENDACOES, recomendar_para_usuario
 
 logger = logging.getLogger(__name__)
@@ -92,21 +93,26 @@ def _buscar_traducao_agora(item, tipo, idioma):
     # jeito que título/sinopse caem pro original quando não há tradução.
     poster = info.get("poster_no_idioma") or ""
     cache = dict(item.traducoes or {})
-    # "v": 2 marca esse formato como já corrigido (sinopse em branco em vez
-    # de reaproveitar texto no idioma errado) — usado pelo comando
-    # limpar_cache_traducoes pra saber quais entradas antigas (sem essa
-    # marca) precisam ser descartadas e buscadas de novo. Entradas antigas
-    # (já "v": 2, mas de antes do trailer/pôster existirem) simplesmente não
-    # têm essas chaves — sem problema, `_trailer_no_idioma`/`_poster_no_
-    # idioma` caem pro original nesse caso, e a próxima vez que alguém
-    # navegar nesse idioma pra esse título, essa entrada é reescrita já com
-    # elas.
+    # "v": 3 marca esse formato como já corrigido — usado pelo comando
+    # limpar_cache_traducoes pra saber quais entradas antigas (com uma marca
+    # "v" mais baixa, ou sem marca nenhuma) precisam ser descartadas e
+    # buscadas de novo. A versão 2 corrigiu a sinopse (em branco em vez de
+    # reaproveitar texto no idioma errado); a versão 3 corrigiu um bug
+    # parecido com o PÔSTER: entradas "v": 2 salvas ANTES do pôster/trailer
+    # por idioma existirem tinham essas chaves faltando, e como
+    # `_texto_no_idioma`/`_traduzir_varios` só disparam uma busca nova
+    # quando NÃO existe cache pra aquele idioma (não quando o cache existe
+    # mas está incompleto), esses títulos ficavam pra sempre com o pôster
+    # de fallback mesmo quando o TMDB tinha uma capa própria pra aquele
+    # idioma — mais comum em títulos vistos cedo em idiomas "grandes" (zh,
+    # hi, ar, bn, ur...). Bumping a versão força esse recadastro uma única
+    # vez (`limpar_cache_traducoes` já roda em todo deploy, ver build.sh).
     cache[idioma] = {
         "titulo": titulo,
         "sinopse": sinopse,
         "trailer_youtube_url": trailer,
         "poster_url": poster,
-        "v": 2,
+        "v": 3,
     }
     item.traducoes = cache
     try:
@@ -627,6 +633,45 @@ def lista(request, tipo):
     return render(request, "catalog/lista.html", contexto)
 
 
+def adaptacoes(request):
+    """Aba "Adaptações" — separada do catálogo comum (pedido explicitamente:
+    "em uma aba separada"), lista todos os pares livro↔filme/série
+    detectados automaticamente pelo algoritmo (ver catalog/adaptacoes.py) —
+    nunca cadastrados manualmente."""
+    idioma_atual = _idioma_atual(request)
+    idioma_tmdb_atual = _idioma_tmdb_atual(request)
+
+    vinculos = list(Adaptacao.objects.select_related("livro", "content_type").order_by("livro__titulo"))
+
+    pares = []
+    itens_pra_traduzir = []
+    for vinculo in vinculos:
+        alvo = vinculo.adaptacao
+        if alvo is None:
+            continue  # filme/série apagado depois do vínculo criado — ignora, sem quebrar a página
+        alvo.tipo = vinculo.content_type.model
+        vinculo.livro.tipo = "livro"
+        pares.append({"livro": vinculo.livro, "alvo": alvo})
+        itens_pra_traduzir.append((vinculo.livro, "livro"))
+        itens_pra_traduzir.append((alvo, alvo.tipo))
+
+    # Só filme/série tem título traduzido por idioma (ver _aplicar_exibicao);
+    # o livro sempre usa o título original, mas passar ele junto não causa
+    # problema nenhum (a função já sabe pular tipo "livro" pra tradução).
+    _aplicar_exibicao(itens_pra_traduzir, idioma_tmdb_atual)
+
+    paginator = Paginator(pares, ITENS_POR_PAGINA)
+    pagina = paginator.get_page(request.GET.get("pagina"))
+
+    contexto = {
+        "pares": pagina,
+        "pagina_info": traduzir("lista_pagina_info", idioma_atual).format(
+            atual=pagina.number, total=paginator.num_pages
+        ),
+    }
+    return render(request, "catalog/adaptacoes.html", contexto)
+
+
 def _idioma_atual(request):
     codigo = request.session.get("idioma", IDIOMA_PADRAO)
     return codigo if codigo in IDIOMAS else IDIOMA_PADRAO
@@ -686,6 +731,74 @@ def _titulo_ja_lancado(item):
     if item.data_lancamento:
         return item.data_lancamento <= timezone.localdate()
     return item.ano_lancamento <= timezone.now().year
+
+
+# Janela de dias, a partir do lançamento, em que um filme é considerado
+# "em cartaz" (ainda rodando nos cinemas) — usada só pra decidir se mostra
+# o botão "Ver sessões nos cinemas" (ver `detalhe` abaixo). 45 dias cobre
+# bem a janela normal de exibição comercial no Brasil (a maioria dos
+# filmes sai de cartaz entre 4 e 8 semanas depois da estreia, salvo grandes
+# sucessos que ficam mais tempo — mas pra esses o botão simplesmente some
+# um pouco antes da hora, o que é um erro bem menos ruim do que mostrar
+# "compre ingresso" pra um filme lançado há anos).
+DIAS_EM_CARTAZ = 45
+
+
+def _filme_em_cartaz(item):
+    """Decide se um Filme está "em cartaz" (nos cinemas agora), de forma
+    automática pela data de lançamento — sem nenhum campo manual novo, no
+    mesmo estilo de `_trilha_estreias_semana` (que já faz essa mesma conta
+    pra decidir o que é "estreia da semana" na home).
+
+    Só existe pra Filme (série não vai ao cinema); sem `data_lancamento`
+    exata (títulos antigos cadastrados antes desse campo existir), não dá
+    pra saber com precisão — assume que não está em cartaz, em vez de
+    arriscar mostrar o botão de comprar ingresso pra algo que pode ter
+    lançado há anos."""
+    if not item.data_lancamento:
+        return False
+    hoje = timezone.localdate()
+    return item.data_lancamento <= hoje <= item.data_lancamento + datetime.timedelta(days=DIAS_EM_CARTAZ)
+
+
+def _link_ingresso_com(titulo):
+    """Monta uma busca automática no ingresso.com pelo título do filme —
+    pedido explicitamente pelo usuário ("busca automática no ingresso.com",
+    em vez de cadastrar um link por filme manualmente). Sem sessões/salas
+    cadastradas no site (esse projeto não tem essa informação — ver decisão
+    de deixar "Nos cinemas" de fora), a busca no próprio ingresso.com é
+    quem resolve mostrar (ou não) sessões perto da pessoa."""
+    from urllib.parse import quote_plus
+
+    return f"https://www.ingresso.com/busca?texto={quote_plus(titulo)}"
+
+
+def _adaptacoes_do_item(item, tipo):
+    """Devolve a lista de títulos vinculados a `item` na outra ponta da
+    adaptação (ver Adaptacao em models.py) — pro card "Do livro à tela" na
+    página de detalhe (`templates/catalog/detalhe.html`). Pra um Livro,
+    devolve os filmes/séries que são adaptação dele; pra um Filme/Série,
+    devolve o(s) livro(s) que ele adapta. Cada item devolvido já sai com
+    `.tipo` marcado, pra montar o link com `{% url 'detalhe' %}` no
+    template."""
+    encontrados = []
+    if tipo == "livro":
+        for vinculo in item.adaptacoes.select_related("content_type").all():
+            alvo = vinculo.adaptacao
+            if alvo is not None:
+                alvo.tipo = vinculo.content_type.model
+                alvo.rotulo_chave = TIPOS[alvo.tipo]["rotulo_chave"]
+                encontrados.append(alvo)
+    elif tipo in ("filme", "serie"):
+        content_type = ContentType.objects.get_for_model(type(item))
+        vinculos = Adaptacao.objects.filter(content_type=content_type, object_id=item.pk).select_related(
+            "livro"
+        )
+        for vinculo in vinculos:
+            vinculo.livro.tipo = "livro"
+            vinculo.livro.rotulo_chave = TIPOS["livro"]["rotulo_chave"]
+            encontrados.append(vinculo.livro)
+    return encontrados
 
 
 def detalhe(request, tipo, pk):
@@ -762,7 +875,22 @@ def detalhe(request, tipo, pk):
         # não é salva (ver comentário lá). O título continua aparecendo e
         # sendo navegável normalmente — só a avaliação fica bloqueada.
         "ja_lancado": _titulo_ja_lancado(item),
+        # Card "Do livro à tela" — lista de livros (se `item` for filme/
+        # série) ou de filmes/séries (se `item` for livro) vinculados
+        # automaticamente pelo algoritmo de detecção (ver
+        # catalog/adaptacoes.py). Vazio na maioria dos títulos (a maior
+        # parte do catálogo não tem adaptação nenhuma) — o template só
+        # mostra o card quando essa lista não está vazia.
+        "adaptacoes": _adaptacoes_do_item(item, tipo),
     }
+    if tipo == "filme":
+        # Botão "Ver sessões nos cinemas" — só aparece pra filme (série não
+        # vai ao cinema) e só quando a data de lançamento indica que ainda
+        # deve estar em cartaz (ver `_filme_em_cartaz`). O link é uma busca
+        # automática no ingresso.com pelo título, não uma sessão específica
+        # (o site não tem dados de sessão/sala — ver `_link_ingresso_com`).
+        contexto["em_cartaz"] = _filme_em_cartaz(item)
+        contexto["link_ingresso"] = _link_ingresso_com(item.titulo_exibicao or item.titulo)
     return render(request, "catalog/detalhe.html", contexto)
 
 
@@ -938,10 +1066,17 @@ def _guardar_sinopse_detalhada_omdb(item, sinopse_omdb):
     traducao_atual = cache.get("en-US") or {}
     if len(sinopse_omdb) <= len(traducao_atual.get("sinopse", "") or ""):
         return
+    # Preserva pôster/trailer que já estivessem cacheados pra en-US — essa
+    # função só tem uma sinopse nova pra oferecer (o OMDb não devolve
+    # pôster nem trailer), então SOBRESCREVER o dict inteiro (em vez de só
+    # a chave "sinopse") apagaria silenciosamente uma capa/trailer em
+    # inglês que já tivesse sido buscada antes (mesma classe de bug
+    # corrigida pela "v": 3 em `_buscar_traducao_agora`).
     cache["en-US"] = {
+        **traducao_atual,
         "titulo": traducao_atual.get("titulo") or item.titulo,
         "sinopse": sinopse_omdb,
-        "v": 2,
+        "v": 3,
     }
     item.traducoes = cache
     item.save(update_fields=["traducoes"])
@@ -1180,8 +1315,14 @@ def _criar_filme_rapido(resultado_busca, idioma_tmdb=None):
         "id_externo": id_externo,
         "idioma_tmdb_conteudo": idioma_tmdb or busca_externa.IDIOMA_TMDB_PADRAO,
     }
-    obj, _ = Filme.objects.get_or_create(titulo=titulo, defaults=dados)
+    obj, criado = Filme.objects.get_or_create(titulo=titulo, defaults=dados)
     _importar_generos(obj, resultado_busca.get("generos", []))
+    if criado:
+        # Algoritmo automático: confere se esse filme é a adaptação de
+        # algum livro já cadastrado (ver catalog/adaptacoes.py). Só na
+        # criação (não em toda busca) pra não escanear o catálogo inteiro
+        # de novo cada vez que alguém pesquisa um título que já existe.
+        adaptacoes_matching.detectar_adaptacoes_para_filme_serie(obj)
     return obj
 
 
@@ -1203,8 +1344,10 @@ def _criar_serie_rapida(resultado_busca, idioma_tmdb=None):
         "id_externo": id_externo,
         "idioma_tmdb_conteudo": idioma_tmdb or busca_externa.IDIOMA_TMDB_PADRAO,
     }
-    obj, _ = Serie.objects.get_or_create(titulo=titulo, defaults=dados)
+    obj, criado = Serie.objects.get_or_create(titulo=titulo, defaults=dados)
     _importar_generos(obj, resultado_busca.get("generos", []))
+    if criado:
+        adaptacoes_matching.detectar_adaptacoes_para_filme_serie(obj)
     return obj
 
 
@@ -1225,10 +1368,12 @@ def _criar_livro_rapido(resultado_busca):
     }
     if resultado_busca.get("numero_paginas"):
         dados["numero_paginas"] = resultado_busca["numero_paginas"]
-    obj, _ = Livro.objects.get_or_create(titulo=titulo, defaults=dados)
+    obj, criado = Livro.objects.get_or_create(titulo=titulo, defaults=dados)
     if resultado_busca.get("autor"):
         obj.autor_pessoa = _importar_pessoa(resultado_busca["autor"], resultado_busca.get("autor_foto_url", ""))
         obj.save()
+    if criado:
+        adaptacoes_matching.detectar_adaptacoes_para_livro(obj)
     return obj
 
 
@@ -1256,9 +1401,11 @@ def _criar_filme_do_tmdb(tmdb_id, idioma_tmdb=None):
     info["id_externo"] = str(tmdb_id)
     info["idioma_tmdb_conteudo"] = idioma_tmdb
     info["dados_completos"] = True
-    obj, _ = Filme.objects.get_or_create(titulo=info["titulo"], defaults=info)
+    obj, criado = Filme.objects.get_or_create(titulo=info["titulo"], defaults=info)
     _importar_generos(obj, generos)
     _importar_elenco(obj, elenco)
+    if criado:
+        adaptacoes_matching.detectar_adaptacoes_para_filme_serie(obj)
     return obj
 
 
@@ -1282,9 +1429,11 @@ def _criar_serie_do_tmdb(tmdb_id, idioma_tmdb=None):
     info["id_externo"] = str(tmdb_id)
     info["idioma_tmdb_conteudo"] = idioma_tmdb
     info["dados_completos"] = True
-    obj, _ = Serie.objects.get_or_create(titulo=info["titulo"], defaults=info)
+    obj, criado = Serie.objects.get_or_create(titulo=info["titulo"], defaults=info)
     _importar_generos(obj, generos)
     _importar_elenco(obj, elenco)
+    if criado:
+        adaptacoes_matching.detectar_adaptacoes_para_filme_serie(obj)
     return obj
 
 
@@ -1306,12 +1455,14 @@ def _criar_livro_do_openlibrary(resultado_busca):
     }
     if resultado_busca.get("numero_paginas"):
         dados["numero_paginas"] = resultado_busca["numero_paginas"]
-    obj, _ = Livro.objects.get_or_create(titulo=titulo, defaults=dados)
+    obj, criado = Livro.objects.get_or_create(titulo=titulo, defaults=dados)
     if resultado_busca.get("autor"):
         obj.autor_pessoa = _importar_pessoa(
             resultado_busca["autor"], resultado_busca.get("autor_foto_url", "")
         )
         obj.save()
+    if criado:
+        adaptacoes_matching.detectar_adaptacoes_para_livro(obj)
     return obj
 
 

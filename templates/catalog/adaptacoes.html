@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% load i18n_custom %}
+
+{% block titulo %}{% t "nav_adaptacoes" %} — CineBooks{% endblock %}
+
+{% block conteudo %}
+<div class="nc-pagina">
+    <div class="nc-filtro-barra" style="padding-top:32px">
+        <span class="nc-filtro-rotulo">{% t "nav_adaptacoes" %}</span>
+        <span class="nc-filtro-contagem">{{ pagina_info }}</span>
+    </div>
+    <p class="nc-text-muted" style="max-width:640px;margin-top:4px">{% t "adaptacoes_intro" %}</p>
+
+    <div class="nc-adaptacoes-grade">
+        {% for par in pares %}
+            <div class="nc-adaptacao-par">
+                <a href="{% url 'detalhe' 'livro' par.livro.pk %}" class="nc-adaptacao-par__lado">
+                    <img src="{{ par.livro.poster_exibicao|default:par.livro.poster_url|default:'https://placehold.co/220x330/232532/e9e9ed?text=%20' }}"
+                         loading="lazy" alt="Capa de {{ par.livro.titulo }}">
+                    <span>
+                        <span class="nc-adaptacao-par__titulo">{{ par.livro.titulo }}</span>
+                        <span class="nc-adaptacao-par__meta">{% t "tipo_livro" %} · {{ par.livro.ano_lancamento }}</span>
+                    </span>
+                </a>
+                <span class="nc-adaptacao-par__seta">&rarr;</span>
+                <a href="{% url 'detalhe' par.alvo.tipo par.alvo.pk %}" class="nc-adaptacao-par__lado">
+                    <img src="{{ par.alvo.poster_exibicao|default:par.alvo.poster_url|default:'https://placehold.co/220x330/232532/e9e9ed?text=%20' }}"
+                         loading="lazy" alt="Pôster de {{ par.alvo.titulo_exibicao|default:par.alvo.titulo }}">
+                    <span>
+                        <span class="nc-adaptacao-par__titulo">{{ par.alvo.titulo_exibicao|default:par.alvo.titulo }}</span>
+                        <span class="nc-adaptacao-par__meta">
+                            {% if par.alvo.tipo == "serie" %}{% t "tipo_serie" %}{% else %}{% t "tipo_filme" %}{% endif %}
+                            · {{ par.alvo.ano_lancamento }}
+                        </span>
+                    </span>
+                </a>
+            </div>
+        {% empty %}
+            <p class="nc-text-muted">{% t "adaptacoes_vazio" %}</p>
+        {% endfor %}
+    </div>
+
+    {% if pares.paginator.num_pages > 1 %}
+        <nav class="nc-paginacao" aria-label="Paginação">
+            {% if pares.has_previous %}
+                <a href="?pagina={{ pares.previous_page_number }}" class="nc-btn nc-btn-secondary nc-btn-sm">&larr; {% t "lista_pagina_anterior" %}</a>
+            {% endif %}
+            <span>{{ pagina_info }}</span>
+            {% if pares.has_next %}
+                <a href="?pagina={{ pares.next_page_number }}" class="nc-btn nc-btn-secondary nc-btn-sm">{% t "lista_pagina_proxima" %} &rarr;</a>
+            {% endif %}
+        </nav>
+    {% endif %}
+</div>
+{% endblock %}

@@ -145,15 +145,17 @@ class LimparCacheTraducoesTest(TestCase):
     management/commands/limpar_cache_traducoes.py) existe porque a correção
     acima só vale pra traduções NOVAS — sites que já estavam no ar antes da
     correção podem ter salvo entradas erradas no cache (sinopse na língua
-    errada). Cada entrada nova do cache carrega uma marca `"v": 2`; o
-    comando descarta só as entradas SEM essa marca, deixando pra buscar de
-    novo (já corrigido) na próxima visita."""
+    errada). Cada entrada nova do cache carrega uma marca `"v"` (versão
+    atual, ver VERSAO_ATUAL no comando); o comando descarta só as entradas
+    com uma marca mais antiga (ou sem marca nenhuma), deixando pra buscar
+    de novo (já corrigido) na próxima visita."""
 
     def setUp(self):
         self.filme = criar_filme(id_externo="12345")
 
     def test_limpa_entrada_no_formato_antigo(self):
-        # Formato ANTIGO: sem a chave "v" (ou com um valor diferente de 2).
+        # Formato ANTIGO: sem a chave "v" (ou com um valor mais antigo que
+        # VERSAO_ATUAL).
         self.filme.traducoes = {"pt": {"titulo": "X", "sinopse": "texto na língua errada"}}
         self.filme.save()
 
@@ -163,17 +165,17 @@ class LimparCacheTraducoesTest(TestCase):
         self.assertEqual(self.filme.traducoes, {})
 
     def test_nao_mexe_em_entrada_ja_no_formato_novo(self):
-        # Formato NOVO (com "v": 2) já está correto — não precisa (e não
-        # deve) ser apagado de novo a cada deploy, senão o site ficaria
+        # Formato NOVO (na VERSAO_ATUAL) já está correto — não precisa (e
+        # não deve) ser apagado de novo a cada deploy, senão o site ficaria
         # buscando tradução de novo pra sempre, toda vez que o build.sh
         # rodasse esse comando.
-        self.filme.traducoes = {"pt": {"titulo": "Y", "sinopse": "", "v": 2}}
+        self.filme.traducoes = {"pt": {"titulo": "Y", "sinopse": "", "poster_url": "", "trailer_youtube_url": "", "v": 3}}
         self.filme.save()
 
         call_command("limpar_cache_traducoes")
 
         self.filme.refresh_from_db()
-        self.assertEqual(self.filme.traducoes, {"pt": {"titulo": "Y", "sinopse": "", "v": 2}})
+        self.assertEqual(self.filme.traducoes, {"pt": {"titulo": "Y", "sinopse": "", "poster_url": "", "trailer_youtube_url": "", "v": 3}})
 
     def test_item_sem_cache_nenhum_nao_da_erro(self):
         # Filme que nunca teve nenhuma tradução buscada ainda (traducoes={})
@@ -195,9 +197,9 @@ class LimparCacheTraducoesTest(TestCase):
         self.assertEqual(self.filme.traducoes, {})
 
         # A "correção" simulando uma nova busca, já no formato certo...
-        self.filme.traducoes = {"pt": {"titulo": "X", "sinopse": "", "v": 2}}
+        self.filme.traducoes = {"pt": {"titulo": "X", "sinopse": "", "v": 3}}
         self.filme.save()
 
         call_command("limpar_cache_traducoes")  # roda de novo
         self.filme.refresh_from_db()
-        self.assertEqual(self.filme.traducoes, {"pt": {"titulo": "X", "sinopse": "", "v": 2}})
+        self.assertEqual(self.filme.traducoes, {"pt": {"titulo": "X", "sinopse": "", "v": 3}})

@@ -353,3 +353,54 @@ class QueroVer(models.Model):
 
     def __str__(self):
         return f"{self.usuario} quer ver: {self.titulo_lista}"
+
+
+class Adaptacao(models.Model):
+    """Vínculo entre um Livro e a adaptação dele em Filme OU Série — a aba
+    "Adaptações" do site (separada do catálogo comum, ver `views.adaptacoes`)
+    e o card "Do livro à tela" na página de detalhe (ver
+    `templates/catalog/detalhe.html`).
+
+    Esses vínculos NUNCA são cadastrados manualmente: são detectados por um
+    algoritmo automático (`catalog/adaptacoes.py`, função
+    `detectar_adaptacoes_para`) que compara o título do livro com o título
+    de cada filme/série do catálogo (normalizando acentos/pontuação/
+    maiúsculas) e cria o registro quando a semelhança passa de um limiar —
+    ver `LIMIAR_SIMILARIDADE` lá. É chamado automaticamente sempre que um
+    título novo entra no catálogo (livro OU filme/série, não importa qual
+    lado chegou primeiro — ver os pontos de chamada em `views.py`, nas
+    funções `_criar_*`), e também dá pra rodar num catálogo já existente
+    inteiro com `python manage.py detectar_adaptacoes`.
+
+    Mesma técnica de "Generic Foreign Key" de Avaliacao/QueroVer pro lado
+    filme/série (que pode ser um OU outro modelo) — o lado do livro é uma FK
+    normal, já que esse lado é sempre um Livro."""
+
+    livro = models.ForeignKey(
+        Livro, verbose_name="livro", on_delete=models.CASCADE, related_name="adaptacoes"
+    )
+    content_type = models.ForeignKey(ContentType, on_delete=models.CASCADE)
+    object_id = models.PositiveIntegerField()
+    adaptacao = GenericForeignKey("content_type", "object_id")
+
+    # Guardado só pra transparência/depuração (ex: no admin, dá pra ver o
+    # quão "forte" foi a semelhança que gerou esse vínculo) — não é exibido
+    # pro usuário final, já que "72% parecido" sem mais contexto não diz
+    # muita coisa útil pra quem só quer saber "isso é uma adaptação desse
+    # livro ou não é".
+    pontuacao_similaridade = models.FloatField("pontuação de similaridade do título", default=0.0)
+    criado_em = models.DateTimeField("detectado em", auto_now_add=True)
+
+    class Meta:
+        verbose_name = "adaptação"
+        verbose_name_plural = "adaptações"
+        ordering = ["livro__titulo"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["livro", "content_type", "object_id"],
+                name="livro_nao_repete_a_mesma_adaptacao",
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.livro} → {self.adaptacao}"

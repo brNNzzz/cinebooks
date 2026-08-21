@@ -140,7 +140,7 @@ class GuardarSinopseDetalhadaOmdbTest(TestCase):
         views._guardar_sinopse_detalhada_omdb(filme, "A detailed English plot summary.")
         filme.refresh_from_db()
         self.assertEqual(filme.traducoes["en-US"]["sinopse"], "A detailed English plot summary.")
-        self.assertEqual(filme.traducoes["en-US"]["v"], 2)
+        self.assertEqual(filme.traducoes["en-US"]["v"], 3)
         # A sinopse original continua intacta.
         self.assertEqual(filme.sinopse, "Resumo em português.")
 

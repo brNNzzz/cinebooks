@@ -97,3 +97,33 @@
     </div>
 </div>
 {% endblock %}
+
+{% block extra_js %}
+<script>
+{% comment %}
+Troca de aba (Quero ver/Assistidos/Lidos/Ano em revisão) feita em JS puro,
+SEM depender do componente de aba do Bootstrap. Antes disso, os botões
+usavam só "data-bs-toggle"/"data-bs-target" (o mecanismo do Bootstrap) —
+só que o Bootstrap gerencia a classe "active" NELE MESMO, não a "is-active"
+que o visual daqui usa pra destacar a aba selecionada (ver ".nc-chip.
+is-active" em nocturne.css). Resultado: o conteúdo até podia trocar, mas o
+botão clicado nunca ficava destacado (sempre parecia que "Quero ver"
+continuava selecionado) — o mesmo motivo, aliás, pelo qual o resto do site
+já tem regras de CSS "de segurança" que repetem o comportamento padrão do
+Bootstrap sem depender dele (ver comentário em nocturne.css sobre
+".tab-pane"/".tab-pane.active" — essas classes aqui são as mesmas, só que
+agora quem TROCA elas é este script, não mais o Bootstrap).
+{% endcomment %}
+document.querySelectorAll('.nc-perfil-abas [data-bs-target]').forEach(function (botao) {
+    botao.addEventListener('click', function () {
+        var alvoId = botao.getAttribute('data-bs-target');
+        document.querySelectorAll('.nc-perfil-abas [data-bs-target]').forEach(function (b) {
+            b.classList.toggle('is-active', b === botao);
+        });
+        document.querySelectorAll('.tab-content > .tab-pane').forEach(function (painel) {
+            painel.classList.toggle('active', '#' + painel.id === alvoId);
+        });
+    });
+});
+</script>
+{% endblock %}

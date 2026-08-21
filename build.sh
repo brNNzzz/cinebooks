@@ -62,6 +62,13 @@ python manage.py buscar_datas_lancamento || true
 # basta buscar uma vez só). Sem TMDB_API_KEY, não faz nada e segue o deploy.
 python manage.py atualizar_onde_assistir || true
 
+# Detecta automaticamente vínculos livro↔filme/série (aba "Adaptações", ver
+# catalog/adaptacoes.py) no catálogo já existente — a detecção automática
+# normal só roda quando um título NOVO é importado, então esse comando
+# cobre os títulos que já estavam cadastrados antes dessa funcionalidade
+# existir. Idempotente (não duplica vínculo já detectado).
+python manage.py detectar_adaptacoes || true
+
 # Cria o usuário administrador automaticamente, usando as variáveis de
 # ambiente DJANGO_SUPERUSER_USERNAME / _EMAIL / _PASSWORD, se elas estiverem
 # configuradas no painel do Render. Se o usuário já existir, o comando dá
