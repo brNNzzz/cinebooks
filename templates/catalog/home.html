@@ -81,6 +81,28 @@
     </div>
 {% endif %}
 
+{% comment %}
+"Recomendados pra você" fica logo abaixo do carrossel (pedido
+explicitamente) — antes até das trilhas ("Em alta"/"Estreias da
+semana"/...), que é conteúdo geral do catálogo, não pessoal. Só aparece pra
+quem está logado E já tem alguma pista de gosto (ver
+catalog.recomendacoes.recomendar_para_usuario) — sem isso, `recomendados`
+vem vazio e essa seção inteira some, sem deixar buraco na página.
+{% endcomment %}
+{% if recomendados %}
+<div class="nc-secao" style="padding-top:28px">
+    <div class="nc-secao-cabecalho">
+        <div>
+            <h2 class="nc-secao-titulo">✨ {% t "home_recomendados_titulo" %}</h2>
+            <p class="nc-secao-subtitulo">{% t "home_recomendados_subtitulo" %}</p>
+        </div>
+    </div>
+    <div class="nc-grade">
+        {% for item in recomendados %}{% include "catalog/_card.html" with item=item tipo=item.tipo %}{% endfor %}
+    </div>
+</div>
+{% endif %}
+
 <div class="nc-trilhas">
     <span class="nc-trilhas__rotulo">{{ trilhas_rotulo }}</span>
     {% for chip in trilhas_chips %}
@@ -100,20 +122,6 @@
         {% endfor %}
     </div>
 </div>
-
-{% if recomendados %}
-<div class="nc-secao" style="padding-top:8px">
-    <div class="nc-secao-cabecalho">
-        <div>
-            <h2 class="nc-secao-titulo">✨ {% t "home_recomendados_titulo" %}</h2>
-            <p class="nc-secao-subtitulo">{% t "home_recomendados_subtitulo" %}</p>
-        </div>
-    </div>
-    <div class="nc-grade">
-        {% for item in recomendados %}{% include "catalog/_card.html" with item=item tipo=item.tipo %}{% endfor %}
-    </div>
-</div>
-{% endif %}
 
 <div class="nc-secao" style="padding-top:8px">
     <div class="nc-secao-cabecalho">

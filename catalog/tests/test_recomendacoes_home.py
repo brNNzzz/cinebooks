@@ -55,3 +55,27 @@ class RecomendadosNaHomeTest(TestCase):
         # aparecer (garante que o template renderizou a seção inteira, não
         # só coincidentemente o nome do filme em outro lugar da página).
         self.assertContains(resposta, "Com base nas suas avaliações")
+
+    def test_recomendados_fica_logo_abaixo_do_carrossel_antes_das_trilhas(self):
+        # Pedido explicitamente: a fileira de recomendados precisa vir ANTES
+        # das trilhas (chips "Em alta"/"Estreias da semana"/...), não depois
+        # — ela é a primeira coisa pessoal que a pessoa vê ao entrar na home.
+        usuario = criar_usuario()
+        avaliado = criar_filme(titulo="Duna", ano=2021)
+        avaliado.generos.add(self.genero)
+        Avaliacao.objects.create(
+            usuario=usuario,
+            nota=5,
+            content_type=ContentType.objects.get_for_model(avaliado.__class__),
+            object_id=avaliado.pk,
+        )
+        candidato = criar_filme(titulo="Interestelar", ano=2014)
+        candidato.generos.add(self.genero)
+
+        self.client.force_login(usuario)
+        resposta = self.client.get("/")
+        html = resposta.content.decode()
+
+        posicao_recomendados = html.index("Recomendados pra você")
+        posicao_trilhas = html.index("nc-trilhas")
+        self.assertLess(posicao_recomendados, posicao_trilhas)
