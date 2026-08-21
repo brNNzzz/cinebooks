@@ -21,7 +21,7 @@ class LinkIngressoTest(SimpleTestCase):
         url = views._link_ingresso_com("A Jornada do Herói Perdido: Parte 2")
         self.assertEqual(
             url,
-            "https://www.ingresso.com/busca?texto=" + quote_plus("A Jornada do Herói Perdido: Parte 2"),
+            "https://www.ingresso.com/busca/resultado?q=" + quote_plus("A Jornada do Herói Perdido: Parte 2"),
         )
 
 
@@ -56,7 +56,7 @@ class DetalheFilmeMostraBotaoDeIngressoTest(TestCase):
             data_lancamento=timezone.localdate() - datetime.timedelta(days=2),
         )
         resposta = Client().get(reverse("detalhe", args=["filme", filme.pk]))
-        self.assertContains(resposta, "ingresso.com/busca?texto=")
+        self.assertContains(resposta, "ingresso.com/busca/resultado?q=")
         self.assertContains(resposta, quote_plus("Filme Em Cartaz Agora"))
 
     def test_filme_fora_de_cartaz_nao_mostra_botao(self):

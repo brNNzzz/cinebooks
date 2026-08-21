@@ -240,9 +240,11 @@
 .nc-estrelas { display: flex; gap: 4px; align-items: center; }
 .nc-estrela { background: none; border: 0; padding: 4px; cursor: pointer; line-height: 0; }
 .nc-estrela svg { width: 26px; height: 26px; display: block; fill: var(--color-neutral-800); }
-.nc-estrela.is-cheia svg { fill: var(--color-accent); }
-form:hover .nc-estrela svg { fill: var(--color-neutral-800); }
-.nc-estrelas-nota { margin-left: 10px; font: 400 13px/1 var(--font-body); color: var(--color-accent-300); }
+/* Estrela preenchida em dourado (pedido explicitamente: "estrelas douradas
+   e não roxas") — cor fixa, separada do roxo --color-accent que o resto do
+   site usa, por isso não é um token novo em :root (só usada aqui). */
+.nc-estrela.is-cheia svg { fill: #f5c518; }
+.nc-estrelas-nota { margin-left: 10px; font: 400 13px/1 var(--font-body); color: #f5c518; }
 .nc-estrelas-texto { margin-top: 12px; font: 400 12.5px/1.5 var(--font-body); color: var(--color-neutral-600); }
 
 .nc-card-lateral { padding: 18px; border: 1px solid rgba(233,233,237,.1); border-radius: 10px; background: var(--color-surface); }

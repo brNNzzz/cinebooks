@@ -255,5 +255,39 @@ document.querySelectorAll('.nc-estrelas[data-nota-atual] .nc-estrela').forEach(f
         }
     });
 });
+
+{% comment %}
+Animação de "passar o mouse" nas estrelas (preencher até a estrela sob o
+cursor, pra pré-visualizar a nota antes de clicar). Existia uma tentativa
+disso só em CSS (regra "form:hover .nc-estrela svg", já removida de
+site.css) que não funcionava: ela reagia a QUALQUER hover dentro do
+formulário inteiro (não só nas estrelas) e sempre voltava todas pra vazia,
+nunca preenchia nada — o oposto do efeito pretendido. Substituída por JS
+simples: ao passar o mouse numa estrela, preenche ela e todas as
+ANTERIORES (índice menor); ao tirar o mouse de cima do grupo inteiro,
+volta pro estado real (a nota já salva, guardada em "data-nota-atual"
+quando existe uma avaliação, ou nenhuma estrela preenchida se a pessoa
+ainda não avaliou).
+{% endcomment %}
+document.querySelectorAll('.nc-estrelas').forEach(function (grupo) {
+    var estrelas = Array.from(grupo.querySelectorAll('.nc-estrela'));
+    // Só o grupo INTERATIVO (o formulário de avaliar, com botões de
+    // verdade) recebe a animação de hover — a listagem de avaliações já
+    // feitas logo abaixo reaproveita a mesma classe "nc-estrelas" só pra
+    // exibir a nota (com <span>, não <button>), e não deve reagir ao mouse.
+    if (!estrelas.length || estrelas[0].tagName !== 'BUTTON') { return; }
+    var notaSalva = parseInt(grupo.getAttribute('data-nota-atual') || '0', 10);
+
+    function pintarAte(quantidade) {
+        estrelas.forEach(function (estrela, indice) {
+            estrela.classList.toggle('is-cheia', indice < quantidade);
+        });
+    }
+
+    estrelas.forEach(function (estrela, indice) {
+        estrela.addEventListener('mouseenter', function () { pintarAte(indice + 1); });
+    });
+    grupo.addEventListener('mouseleave', function () { pintarAte(notaSalva); });
+});
 </script>
 {% endblock %}

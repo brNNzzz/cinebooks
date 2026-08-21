@@ -767,10 +767,15 @@ def _link_ingresso_com(titulo):
     em vez de cadastrar um link por filme manualmente). Sem sessões/salas
     cadastradas no site (esse projeto não tem essa informação — ver decisão
     de deixar "Nos cinemas" de fora), a busca no próprio ingresso.com é
-    quem resolve mostrar (ou não) sessões perto da pessoa."""
+    quem resolve mostrar (ou não) sessões perto da pessoa.
+
+    IMPORTANTE: o caminho de busca do ingresso.com é "/busca/resultado",
+    com o termo no parâmetro "q" — NÃO "/busca" com "texto" (formato que a
+    primeira versão desse código usava, por engano, e que dava 404 no site
+    de verdade — conferido direto no ingresso.com antes de corrigir aqui)."""
     from urllib.parse import quote_plus
 
-    return f"https://www.ingresso.com/busca?texto={quote_plus(titulo)}"
+    return f"https://www.ingresso.com/busca/resultado?q={quote_plus(titulo)}"
 
 
 def _adaptacoes_do_item(item, tipo):

@@ -151,3 +151,30 @@
     </div>
 </div>
 {% endblock %}
+
+{% block extra_js %}
+<script>
+{% comment %}
+Sincroniza a bolinha destacada embaixo do carrossel com o slide que está
+sendo mostrado. Mesmo motivo do bug já corrigido nas abas do perfil (ver
+templates/catalog/perfil.html): o Bootstrap troca de slide sozinho (é ele
+quem faz os filmes mudarem, incluindo no autoplay a cada 8s) e ele PRÓPRIO
+gerencia a classe "active" nos indicadores — só que o destaque visual da
+bolinha aqui usa "is-active" (nossa classe, ver ".nc-hero__ponto.is-active"
+em site.css), que o Bootstrap nunca toca. Resultado: o slide trocava, mas
+a bolinha ficava sempre parada na primeira. O evento "slide.bs.carousel"
+avisa pra QUAL índice o carrossel está indo (event.to) — usamos isso pra
+mover o "is-active" pra bolinha certa, sem precisar reescrever a troca de
+slide em si (essa parte do Bootstrap já funciona normalmente).
+{% endcomment %}
+var carrossel = document.getElementById('carrosselDestaques');
+if (carrossel) {
+    var pontos = carrossel.querySelectorAll('.nc-hero__ponto');
+    carrossel.addEventListener('slide.bs.carousel', function (evento) {
+        pontos.forEach(function (ponto, indice) {
+            ponto.classList.toggle('is-active', indice === evento.to);
+        });
+    });
+}
+</script>
+{% endblock %}
